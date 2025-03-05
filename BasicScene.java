@@ -10,13 +10,18 @@ import org.jogamp.java3d.*;
 import org.jogamp.java3d.utils.universe.SimpleUniverse;
 import org.jogamp.java3d.utils.geometry.Box;
 import org.jogamp.vecmath.*;
+import java.awt.geom.Rectangle2D;
+import java.util.ArrayList;
+import java.util.List;
 
 public class BasicScene extends JPanel {
     private static final long serialVersionUID = 1L;
     private static JFrame frame;
     private TransformGroup redBoxTG;
     private Vector3d redBoxPos = new Vector3d(0.0, 0.1, 0.0);
-    private final double STEP = 0.1;
+    private final double STEP = 0.05; // lowered so walls cant be skipped over
+    private List<Rectangle2D.Double> wallBounds = new ArrayList<>();
+    private static final double RED_BOX_HALF = 0.03;
 
     public BasicScene() {}
 
@@ -83,14 +88,25 @@ public class BasicScene extends JPanel {
         return sceneBG;
     }
 
-    private void addWall(BranchGroup sceneBG, double x, double y, double z, double width, double height, double depth, Appearance appearance) {
+    private void addWall(BranchGroup sceneBG, double x, double y, double z,
+                         double width, double height, double depth,
+                         Appearance appearance) {
         Transform3D transform = new Transform3D();
         transform.setTranslation(new Vector3d(x, y, z));
         TransformGroup tg = new TransformGroup(transform);
-        Box wall = new Box((float) width, (float) height, (float) depth, Box.GENERATE_NORMALS, appearance);
+        Box wall = new Box((float) width, (float) height, (float) depth,
+                Box.GENERATE_NORMALS, appearance);
         tg.addChild(wall);
         sceneBG.addChild(tg);
+        double left   = x - width;
+        double top    = z + depth;     // top > bottom
+        double rectWidth  = 2 * width; // total width in x
+        double rectHeight = 2 * depth; // total height in z
+        double bottom = top - rectHeight;
+        Rectangle2D.Double wallRect = new Rectangle2D.Double(left, bottom, rectWidth, rectHeight);
+        wallBounds.add(wallRect);
     }
+
 
     public void setupUniverse(BranchGroup sceneBG) {
         GraphicsConfiguration config = SimpleUniverse.getPreferredConfiguration();
@@ -99,17 +115,29 @@ public class BasicScene extends JPanel {
         canvas.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
+//                System.out.println("Key pressed: " + e.getKeyCode());
+                double newX = redBoxPos.x;
+                double newZ = redBoxPos.z;
+
                 switch (e.getKeyChar()) {
-                    case 'w': redBoxPos.z -= STEP; break;
-                    case 's': redBoxPos.z += STEP; break;
-                    case 'a': redBoxPos.x -= STEP; break;
-                    case 'd': redBoxPos.x += STEP; break;
+                    case 'w': newZ -= STEP; break;
+                    case 's': newZ += STEP; break;
+                    case 'a': newX -= STEP; break;
+                    case 'd': newX += STEP; break;
                 }
-                Transform3D newTransform = new Transform3D();
-                newTransform.setTranslation(redBoxPos);
-                redBoxTG.setTransform(newTransform);
+
+                if (!collidesWithWall(newX, newZ)) {
+                    // if safe then move
+                    redBoxPos.x = newX;
+                    redBoxPos.z = newZ;
+
+                    Transform3D newTransform = new Transform3D();
+                    newTransform.setTranslation(redBoxPos);
+                    redBoxTG.setTransform(newTransform);
+                }
             }
         });
+
 
         canvas.setFocusable(true);
         canvas.requestFocusInWindow();
@@ -129,6 +157,28 @@ public class BasicScene extends JPanel {
         setLayout(new BorderLayout());
         add("Center", canvas);
     }
+
+    private boolean collidesWithWall(double x, double z) {
+        // bounding square of red box
+        double half = RED_BOX_HALF;     // 0.03
+        double side = 2 * half;         // 0.06
+
+        Rectangle2D.Double redBoxRect = new Rectangle2D.Double(
+                x - half,
+                z - half,
+                side,
+                side
+        );
+
+        // check wall intersection
+        for (Rectangle2D.Double wallRect : wallBounds) {
+            if (wallRect.intersects(redBoxRect)) {
+                return true;    // collision
+            }
+        }
+        return false;           // no collisions
+    }
+
 
     public static void main(String[] args) {
         frame = new JFrame("Basic Scene: Maze View");
