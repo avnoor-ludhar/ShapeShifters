@@ -115,7 +115,7 @@ public class BasicScene extends JPanel {
         canvas.requestFocusInWindow();
 
         SimpleUniverse universe = new SimpleUniverse(canvas);
-        Point3d eye = new Point3d(0, 3.0, 0);
+        Point3d eye = new Point3d(0, 2.0, 2.5);
         Point3d center = new Point3d(0.0, 0.0, 0.0);
         Vector3d up = new Vector3d(0.0, 0.0, -1.0);
         Transform3D viewTransform = new Transform3D();
