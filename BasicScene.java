@@ -13,21 +13,80 @@ import org.jogamp.vecmath.*;
 import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
 import java.util.List;
+import java.io.*;
+import java.net.*;
 
 public class BasicScene extends JPanel {
     private static final long serialVersionUID = 1L;
     private static JFrame frame;
-    private TransformGroup redBoxTG;
-    private Vector3d redBoxPos = new Vector3d(0.0, 0.1, 0.0);
-    private final double STEP = 0.05; // lowered so walls cant be skipped over
-    private List<Rectangle2D.Double> wallBounds = new ArrayList<>();
-    private static final double RED_BOX_HALF = 0.03;
 
-    public BasicScene() {}
+    // Two boxes for two players (one is controlled locally; the other updates via network)
+    private TransformGroup redBoxTG;
+    private TransformGroup blueBoxTG;
+
+    // Positions (moving only in x and z; y remains constant at 0.1)
+    private Vector3d redBoxPos = new Vector3d(0.0, 0.1, 0.0);
+    private Vector3d blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
+    private final double STEP = 0.05;
+    private List<Rectangle2D.Double> wallBounds = new ArrayList<>();
+    private static final double BOX_HALF = 0.03;
+
+    // Networking variables
+    private Socket socket;
+    private PrintWriter out;
+    private BufferedReader in;
+    private int playerId = 0; // Assigned by the server
+
+    public BasicScene() {
+        // Connect to the server on localhost (or change IP as needed) Currently localhost but can change to public ip
+        try {
+            socket = new Socket("localhost", 5001);
+            out = new PrintWriter(socket.getOutputStream(), true);
+            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            // Read assigned player ID (e.g., "ID 1")
+            String idLine = in.readLine();
+            if (idLine != null && idLine.startsWith("ID ")) {
+                playerId = Integer.parseInt(idLine.substring(3).trim());
+                System.out.println("Assigned player ID: " + playerId);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        // Start a thread to listen for messages from the server.
+        new Thread(() -> {
+            String line;
+            try {
+                while ((line = in.readLine()) != null) {
+                    // Expected format: "id x y z"
+                    String[] tokens = line.split(" ");
+                    if (tokens.length < 4) continue;
+                    int id = Integer.parseInt(tokens[0]);
+                    double x = Double.parseDouble(tokens[1]);
+                    double y = Double.parseDouble(tokens[2]);
+                    double z = Double.parseDouble(tokens[3]);
+                    // Only update the box for the remote player.
+                    if (id != playerId) {
+                        Transform3D update = new Transform3D();
+                        Vector3d pos = new Vector3d(x, y, z);
+                        update.setTranslation(pos);
+                        if (id == 1) {
+                            redBoxTG.setTransform(update);
+                        } else if (id == 2) {
+                            blueBoxTG.setTransform(update);
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }).start();
+    }
 
     public BranchGroup createScene() {
         BranchGroup sceneBG = new BranchGroup();
 
+        // Create the platform
         TransformGroup platformTG = new TransformGroup();
         Appearance platformAppearance = new Appearance();
         platformAppearance.setMaterial(new Material(
@@ -40,6 +99,8 @@ public class BasicScene extends JPanel {
         platformTG.addChild(platform);
         sceneBG.addChild(platformTG);
 
+        // Create red and blue boxes.
+        // Both boxes are created so each instance shows both players.
         Transform3D redBoxTransform = new Transform3D();
         redBoxTransform.setTranslation(redBoxPos);
         redBoxTG = new TransformGroup(redBoxTransform);
@@ -55,6 +116,22 @@ public class BasicScene extends JPanel {
         redBoxTG.addChild(redBox);
         sceneBG.addChild(redBoxTG);
 
+        Transform3D blueBoxTransform = new Transform3D();
+        blueBoxTransform.setTranslation(blueBoxPos);
+        blueBoxTG = new TransformGroup(blueBoxTransform);
+        blueBoxTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
+        Appearance blueAppearance = new Appearance();
+        blueAppearance.setMaterial(new Material(
+                new Color3f(0.0f, 0.0f, 1.0f),
+                new Color3f(0.0f, 0.0f, 0.0f),
+                new Color3f(0.0f, 0.0f, 1.0f),
+                new Color3f(1.0f, 1.0f, 1.0f),
+                64.0f));
+        Box blueBox = new Box(0.03f, 0.03f, 0.03f, Box.GENERATE_NORMALS, blueAppearance);
+        blueBoxTG.addChild(blueBox);
+        sceneBG.addChild(blueBoxTG);
+
+        // Create maze walls (same as your original implementation)
         Appearance wallAppearance = new Appearance();
         wallAppearance.setMaterial(new Material(
                 new Color3f(0.5f, 0.5f, 0.5f),
@@ -78,7 +155,6 @@ public class BasicScene extends JPanel {
                 {-0.5, -0.25, 0.3, innerWallThickness}, {-0.5, 0, innerWallThickness, 0.25},
                 {0.5, -0.5, 0.5, innerWallThickness}, {0.5, -0.25, innerWallThickness, 0.25},
                 {-0.7, -0.65, 0.3, innerWallThickness}, {-0.4, -0.65, innerWallThickness, 0.15}
-
         };
 
         for (double[] wall : mazeWalls) {
@@ -88,6 +164,7 @@ public class BasicScene extends JPanel {
         return sceneBG;
     }
 
+    // Helper to add a wall and store its bounding rectangle for collision detection.
     private void addWall(BranchGroup sceneBG, double x, double y, double z,
                          double width, double height, double depth,
                          Appearance appearance) {
@@ -99,14 +176,13 @@ public class BasicScene extends JPanel {
         tg.addChild(wall);
         sceneBG.addChild(tg);
         double left   = x - width;
-        double top    = z + depth;     // top > bottom
-        double rectWidth  = 2 * width; // total width in x
-        double rectHeight = 2 * depth; // total height in z
+        double top    = z + depth;
+        double rectWidth  = 2 * width;
+        double rectHeight = 2 * depth;
         double bottom = top - rectHeight;
         Rectangle2D.Double wallRect = new Rectangle2D.Double(left, bottom, rectWidth, rectHeight);
         wallBounds.add(wallRect);
     }
-
 
     public void setupUniverse(BranchGroup sceneBG) {
         GraphicsConfiguration config = SimpleUniverse.getPreferredConfiguration();
@@ -115,9 +191,15 @@ public class BasicScene extends JPanel {
         canvas.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
-//                System.out.println("Key pressed: " + e.getKeyCode());
-                double newX = redBoxPos.x;
-                double newZ = redBoxPos.z;
+                double newX, newZ;
+                // Determine which box this client controls based on its player ID.
+                if (playerId == 1) {
+                    newX = redBoxPos.x;
+                    newZ = redBoxPos.z;
+                } else {
+                    newX = blueBoxPos.x;
+                    newZ = blueBoxPos.z;
+                }
 
                 switch (e.getKeyChar()) {
                     case 'w': newZ -= STEP; break;
@@ -127,17 +209,26 @@ public class BasicScene extends JPanel {
                 }
 
                 if (!collidesWithWall(newX, newZ)) {
-                    // if safe then move
-                    redBoxPos.x = newX;
-                    redBoxPos.z = newZ;
-
-                    Transform3D newTransform = new Transform3D();
-                    newTransform.setTranslation(redBoxPos);
-                    redBoxTG.setTransform(newTransform);
+                    if (playerId == 1) {
+                        redBoxPos.x = newX;
+                        redBoxPos.z = newZ;
+                        Transform3D newTransform = new Transform3D();
+                        newTransform.setTranslation(redBoxPos);
+                        redBoxTG.setTransform(newTransform);
+                    } else if (playerId == 2) {
+                        blueBoxPos.x = newX;
+                        blueBoxPos.z = newZ;
+                        Transform3D newTransform = new Transform3D();
+                        newTransform.setTranslation(blueBoxPos);
+                        blueBoxTG.setTransform(newTransform);
+                    }
+                    // Send updated position in the format: "id x y z"
+                    if (out != null) {
+                        out.println(playerId + " " + newX + " " + 0.1 + " " + newZ);
+                    }
                 }
             }
         });
-
 
         canvas.setFocusable(true);
         canvas.requestFocusInWindow();
@@ -158,30 +249,26 @@ public class BasicScene extends JPanel {
         add("Center", canvas);
     }
 
+    // Simple collision detection using bounding rectangles.
     private boolean collidesWithWall(double x, double z) {
-        // bounding square of red box
-        double half = RED_BOX_HALF;     // 0.03
-        double side = 2 * half;         // 0.06
-
-        Rectangle2D.Double redBoxRect = new Rectangle2D.Double(
+        double half = BOX_HALF;
+        double side = 2 * half;
+        Rectangle2D.Double boxRect = new Rectangle2D.Double(
                 x - half,
                 z - half,
                 side,
                 side
         );
-
-        // check wall intersection
         for (Rectangle2D.Double wallRect : wallBounds) {
-            if (wallRect.intersects(redBoxRect)) {
-                return true;    // collision
+            if (wallRect.intersects(boxRect)) {
+                return true;
             }
         }
-        return false;           // no collisions
+        return false;
     }
 
-
     public static void main(String[] args) {
-        frame = new JFrame("Basic Scene: Maze View");
+        frame = new JFrame("Basic Scene: Maze View (Networking)");
         BasicScene basicScene = new BasicScene();
         BranchGroup sceneBG = basicScene.createScene();
         basicScene.setupUniverse(sceneBG);
