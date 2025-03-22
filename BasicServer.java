@@ -9,8 +9,19 @@ public class BasicServer {
     private static final int PORT = 5001;
     private static List<ClientHandler> clients = new ArrayList<>();
     private static int nextPlayerId = 1;
-
+    private static ArrayList<ArrayList<Integer>> maze;
+    private static final int MAZE_HEIGHT = 20;
+    private static final int MAZE_WIDTH = 20;
     public static void main(String[] args) {
+        maze = GenerateMaze.getMaze(20, 20);
+        for (int i = 1; i < MAZE_HEIGHT-1; i++) {
+            for (int j = 1; j < MAZE_WIDTH-1; j++) {
+                if (Math.random() < .1) { //randomly remove 10% of the walls
+                    maze.get(i).set(j, 0);
+                }
+            }
+        }
+
         System.out.println("Server starting on port " + PORT);
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             while (true) {
@@ -47,6 +58,13 @@ public class BasicServer {
                 in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 // Send the player's ID to the client (e.g., "ID 1")
                 out.println("ID " + playerId);
+                StringBuilder mazeStr = new StringBuilder();
+                for (ArrayList<Integer> row : maze) {
+                    for (Integer cell : row) {
+                        mazeStr.append(cell);
+                    }
+                }
+                out.println(mazeStr.toString());
             } catch (IOException e) {
                 e.printStackTrace();
             }
