@@ -4,6 +4,7 @@ import java.awt.BorderLayout;
 import java.awt.GraphicsConfiguration;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.Point;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import org.jogamp.java3d.*;
@@ -15,6 +16,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.io.*;
 import java.net.*;
+import java.util.*;
+import org.jogamp.java3d.PositionInterpolator;
+
 
 public class BasicScene extends JPanel {
     private static final long serialVersionUID = 1L;
@@ -28,13 +32,16 @@ public class BasicScene extends JPanel {
     private Vector3d redBoxPos = new Vector3d(0.0, 0.1, 0.0);
     private Vector3d blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
     private final double STEP = 0.05;
-    private List<Rectangle2D.Double> wallBounds = new ArrayList<>();
+    private HashMap<Rectangle2D.Double, Point> wallBounds = new HashMap<Rectangle2D.Double, Point>();
+//    private List<Rectangle2D.Double> wallBounds = new ArrayList<>();
     private static final double BOX_HALF = 0.03;
 
     // Maze variables
     private static final int MAZE_HEIGHT = 20;
     private static final int MAZE_WIDTH = 20;
     private static int[][] walls = new int[MAZE_HEIGHT][MAZE_WIDTH];
+    private static HashSet<Point> movingWalls = new HashSet<Point>(); //walls that move up and down periodically
+    private static HashMap<Point, Alpha> movingWallAlphas = new HashMap<Point, Alpha>();
 
     // Networking variables
     private Socket socket;
@@ -48,6 +55,7 @@ public class BasicScene extends JPanel {
     public BasicScene() {
         // Connect to the server
         try {
+            //CONNECTING AND GETTING PLAYER ID
             socket = new Socket("localhost", 5001);
             out = new PrintWriter(socket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
@@ -57,6 +65,8 @@ public class BasicScene extends JPanel {
                 playerId = Integer.parseInt(idLine.substring(3).trim());
                 System.out.println("Assigned player ID: " + playerId);
             }
+
+            //READING IN MAZE
             String maze = in.readLine();
             int index = 0;
             if (maze != null) {
@@ -66,6 +76,19 @@ public class BasicScene extends JPanel {
                         index += 1;
                     }
                 }
+            }
+            for (int i = 0; i < 4; i++) {
+                String coords = in.readLine();
+                String[] coordsSplit = coords.split(" ");
+                Point p = new Point(Integer.parseInt(coordsSplit[0]), Integer.parseInt(coordsSplit[1]));
+                movingWalls.add(p);
+                //Set all the alphas to have the same original start time so that they're synced up
+//                long base = new GregorianCalendar(2020, Calendar.JANUARY, 1).getTimeInMillis();
+                long offset = System.currentTimeMillis() % 19000;
+                Alpha a = new Alpha(-1, Alpha.INCREASING_ENABLE | Alpha.DECREASING_ENABLE, 0, 19000-offset, (long)(2000), (long)0, (long)5000, (long)(2000), (long)0, (long)10000);
+//                a.setStartTime(base);
+
+                movingWallAlphas.put(p, a);
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -157,44 +180,60 @@ public class BasicScene extends JPanel {
                 new Color3f(1.0f, 1.0f, 1.0f),
                 64.0f));
 
-        for (int i = 5; i < 15; i++) {
-            for (int j = 5; j < 15; j++) {
-                walls[i][j] = 0;
-            }
-        }
-
-
-
-
         for (int i = 0; i < MAZE_HEIGHT; i++) {
             for (int j = 0; j < MAZE_WIDTH; j++) {
                 if (walls[i][j] == 1) {
-                    addWall(sceneBG, -1 + i * .103f, .1f, -1 + j*.103f, .055f, .05f, .055f, wallAppearance);
+                    TransformGroup tg = addWall(sceneBG, -1 + i * .103f, .1f, -1 + j*.103f, .055f, .05f, .055f, wallAppearance, i, j);
+                    if (movingWalls.contains(new Point(i, j))) {
+//                        System.out.println("THIS HAPPENSNSNSNS");
+                        System.out.printf("%d %d\n", i, j);
+                        tg.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
+                        tg.setCapability(TransformGroup.ALLOW_TRANSFORM_READ);
+
+                        Transform3D axis = new Transform3D();
+                        axis.rotZ(Math.PI/2); //pointing vertically
+                        Alpha a = movingWallAlphas.get(new Point(i, j));
+                        PositionInterpolator interpolator = new PositionInterpolator(
+                                a,
+                                tg,    // The TransformGroup to animate
+                                axis,
+                                0f,     //start
+                                -.101f               //end
+                        );
+                        interpolator.setSchedulingBounds(new BoundingSphere(new Point3d(0.0, 0.0, 0.0), 100.0));
+                        tg.addChild(interpolator);
+                        sceneBG.addChild(tg);
+                    } else {
+                        sceneBG.addChild(tg);
+                    }
                 }
             }
         }
-
         return sceneBG;
     }
 
     // Helper to add a wall and store its bounding rectangle for collision detection.
-    private void addWall(BranchGroup sceneBG, double x, double y, double z,
+    private TransformGroup addWall(BranchGroup sceneBG, double x, double y, double z,
                          double width, double height, double depth,
-                         Appearance appearance) {
+                         Appearance appearance, int i, int j) {
         Transform3D transform = new Transform3D();
         transform.setTranslation(new Vector3d(x, y, z));
         TransformGroup tg = new TransformGroup(transform);
+        TransformGroup tg2 = new TransformGroup();
+        tg2.addChild(tg);
         Box wall = new Box((float) width, (float) height, (float) depth,
                 Box.GENERATE_NORMALS, appearance);
         tg.addChild(wall);
-        sceneBG.addChild(tg);
+
         double left = x - width;
         double top = z + depth;
         double rectWidth = 2 * width;
         double rectHeight = 2 * depth;
         double bottom = top - rectHeight;
         Rectangle2D.Double wallRect = new Rectangle2D.Double(left, bottom, rectWidth, rectHeight);
-        wallBounds.add(wallRect);
+        wallBounds.put(wallRect, new Point(i, j));
+
+        return tg2;
     }
 
     public void setupUniverse(BranchGroup sceneBG) {
@@ -283,7 +322,12 @@ public class BasicScene extends JPanel {
                 side,
                 side
         );
-        for (Rectangle2D.Double wallRect : wallBounds) {
+
+        for (Rectangle2D.Double wallRect : wallBounds.keySet()) {
+            Point coords = wallBounds.get(wallRect);
+            if (movingWallAlphas.containsKey(coords) && movingWallAlphas.get(coords).value() == 1) {
+                return false;
+            }
             if (wallRect.intersects(boxRect)) {
                 return true;
             }

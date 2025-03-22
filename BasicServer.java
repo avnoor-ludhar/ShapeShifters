@@ -4,16 +4,24 @@ import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.*;
 
 public class BasicServer {
     private static final int PORT = 5001;
     private static List<ClientHandler> clients = new ArrayList<>();
     private static int nextPlayerId = 1;
     private static ArrayList<ArrayList<Integer>> maze;
+    private static int[][] movingWalls = new int[4][2];
     private static final int MAZE_HEIGHT = 20;
     private static final int MAZE_WIDTH = 20;
     public static void main(String[] args) {
+        //initialize the maze & which walls move up and down
         maze = GenerateMaze.getMaze(20, 20);
+        for (int i = 7; i < 13; i++) {
+            for (int j = 7; j < 13; j++) {
+                maze.get(i).set(j, 0);
+            }
+        }
         for (int i = 1; i < MAZE_HEIGHT-1; i++) {
             for (int j = 1; j < MAZE_WIDTH-1; j++) {
                 if (Math.random() < .1) { //randomly remove 10% of the walls
@@ -21,6 +29,25 @@ public class BasicServer {
                 }
             }
         }
+        Random rand = new Random();
+        int movingWallsIndex = 0;
+        while (movingWallsIndex < 4) {
+            int i = rand.nextInt(18) + 1;
+            int j = rand.nextInt(18) + 1;
+            boolean found = false;
+            if (maze.get(i).get(j) == 1) {
+                for (int n = 0; n < movingWallsIndex; n++) {
+                    if (movingWalls[n][0] == i && movingWalls[n][1] == j) {
+                        found = true;
+                    }
+                }
+                if (!found) {
+                    movingWalls[movingWallsIndex] = new int[]{i, j};
+                    movingWallsIndex += 1;
+                }
+            }
+        }
+
 
         System.out.println("Server starting on port " + PORT);
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
@@ -65,6 +92,10 @@ public class BasicServer {
                     }
                 }
                 out.println(mazeStr.toString());
+                for (int[] coords: movingWalls) {
+                    out.printf("%d %d\n", coords[0], coords[1]);
+                    System.out.printf("%d %d\n", coords[0], coords[1]);
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             }
