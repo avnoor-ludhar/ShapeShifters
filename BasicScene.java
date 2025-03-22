@@ -14,6 +14,7 @@ import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
 import java.util.List;
 
+
 public class BasicScene extends JPanel {
     private static final long serialVersionUID = 1L;
     private static JFrame frame;
@@ -23,6 +24,9 @@ public class BasicScene extends JPanel {
     private List<Rectangle2D.Double> wallBounds = new ArrayList<>();
     private static final double RED_BOX_HALF = 0.03;
 
+    private static final int MAZE_HEIGHT = 20;
+    private static final int MAZE_WIDTH = 20;
+    private static int[][] walls;
     public BasicScene() {}
 
     public BranchGroup createScene() {
@@ -66,27 +70,44 @@ public class BasicScene extends JPanel {
         float wallThickness = 0.01f;
         float wallHeight = 0.15f;
         float innerWallThickness = 0.005f;
+//
+//        addWall(sceneBG, -1.0, wallHeight / 2, 0.0, wallThickness, wallHeight, 1.0f, wallAppearance);
+//        addWall(sceneBG, 1.0, wallHeight / 2, 0.0, wallThickness, wallHeight, 1.0f, wallAppearance);
+//        addWall(sceneBG, 0.0, wallHeight / 2, -1.0, 1.0f, wallHeight, wallThickness, wallAppearance);
+//        addWall(sceneBG, 0.0, wallHeight / 2, 1.0, 1.0f, wallHeight, wallThickness, wallAppearance);
+//
+//        double[][] mazeWalls = {
+//                {-0.5, 0.75, 0.5, innerWallThickness}, {-0.5, 0.5, innerWallThickness, 0.25},
+//                {0.5, 0.5, 0.5, innerWallThickness}, {0.1, 0.25, innerWallThickness, 0.25},
+//                {-0.5, -0.25, 0.3, innerWallThickness}, {-0.5, 0, innerWallThickness, 0.25},
+//                {0.5, -0.5, 0.5, innerWallThickness}, {0.5, -0.25, innerWallThickness, 0.25},
+//                {-0.7, -0.65, 0.3, innerWallThickness}, {-0.4, -0.65, innerWallThickness, 0.15}
+//
+//        };
+//
+//        for (double[] wall : mazeWalls) {
+//            addWall(sceneBG, wall[0], wallHeight / 2, wall[1], wall[2], wallHeight, wall[3], wallAppearance);
+//        }
+        ArrayList<ArrayList<Integer>> wallsArrayList = GenerateMaze.getMaze(MAZE_HEIGHT-2, MAZE_HEIGHT-2);
+        walls = new int[MAZE_HEIGHT][MAZE_WIDTH];
+        for (int i = 0; i < MAZE_HEIGHT; i++) {
+            for (int j = 0; j < MAZE_WIDTH; j++) {
 
-        addWall(sceneBG, -1.0, wallHeight / 2, 0.0, wallThickness, wallHeight, 1.0f, wallAppearance);
-        addWall(sceneBG, 1.0, wallHeight / 2, 0.0, wallThickness, wallHeight, 1.0f, wallAppearance);
-        addWall(sceneBG, 0.0, wallHeight / 2, -1.0, 1.0f, wallHeight, wallThickness, wallAppearance);
-        addWall(sceneBG, 0.0, wallHeight / 2, 1.0, 1.0f, wallHeight, wallThickness, wallAppearance);
+                walls[i][j] = wallsArrayList.get(i).get(j);
+            }
+        }
 
-        double[][] mazeWalls = {
-                {-0.5, 0.75, 0.5, innerWallThickness}, {-0.5, 0.5, innerWallThickness, 0.25},
-                {0.5, 0.5, 0.5, innerWallThickness}, {0.1, 0.25, innerWallThickness, 0.25},
-                {-0.5, -0.25, 0.3, innerWallThickness}, {-0.5, 0, innerWallThickness, 0.25},
-                {0.5, -0.5, 0.5, innerWallThickness}, {0.5, -0.25, innerWallThickness, 0.25},
-                {-0.7, -0.65, 0.3, innerWallThickness}, {-0.4, -0.65, innerWallThickness, 0.15}
-
-        };
-
-        for (double[] wall : mazeWalls) {
-            addWall(sceneBG, wall[0], wallHeight / 2, wall[1], wall[2], wallHeight, wall[3], wallAppearance);
+        for (int i = 0; i < MAZE_HEIGHT; i++) {
+            for (int j = 0; j < MAZE_WIDTH; j++) {
+                if (walls[i][j] == 1) {
+                    addWall(sceneBG, -1 + i * .103f, .1f, -1 + j*.103f, .055f, .05f, .055f, wallAppearance);
+                }
+            }
         }
 
         return sceneBG;
     }
+
 
     private void addWall(BranchGroup sceneBG, double x, double y, double z,
                          double width, double height, double depth,
