@@ -39,7 +39,7 @@ public class BasicServer {
     // Broadcasts a message to all connected clients.
     public static synchronized void broadcast(String message, ClientHandler sender) {
         for (ClientHandler client : clients) {
-            // Send update to all clients.
+            // Send update to all clients
             client.sendMessage(message);
         }
     }

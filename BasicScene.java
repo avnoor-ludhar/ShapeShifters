@@ -104,7 +104,7 @@ public class BasicScene extends JPanel {
     public BranchGroup createScene() {
         BranchGroup sceneBG = new BranchGroup();
 
-        // Create the platform
+        // Create the platform.
         TransformGroup platformTG = new TransformGroup();
         Appearance platformAppearance = new Appearance();
         platformAppearance.setMaterial(new Material(
@@ -117,7 +117,7 @@ public class BasicScene extends JPanel {
         platformTG.addChild(platform);
         sceneBG.addChild(platformTG);
 
-        // Create red and blue boxes.
+        // Create red and blue boxes (players).
         Transform3D redBoxTransform = new Transform3D();
         redBoxTransform.setTranslation(redBoxPos);
         redBoxTG = new TransformGroup(redBoxTransform);
@@ -157,25 +157,68 @@ public class BasicScene extends JPanel {
                 new Color3f(1.0f, 1.0f, 1.0f),
                 64.0f));
 
+        // Remove maze interior walls for passage.
         for (int i = 5; i < 15; i++) {
             for (int j = 5; j < 15; j++) {
                 walls[i][j] = 0;
             }
         }
 
-
-
-
+        // Add wall boxes based on the maze layout.
         for (int i = 0; i < MAZE_HEIGHT; i++) {
             for (int j = 0; j < MAZE_WIDTH; j++) {
                 if (walls[i][j] == 1) {
-                    addWall(sceneBG, -1 + i * .103f, .1f, -1 + j*.103f, .055f, .05f, .055f, wallAppearance);
+                    addWall(sceneBG, -1 + i * .103f, .1f, -1 + j * .103f,
+                            .055f, .05f, .055f, wallAppearance);
                 }
             }
         }
 
+        // ----------------------------
+        // Add NPC boxes to the scene.
+        // ----------------------------
+        // Define an appearance for NPC boxes (e.g., green color).
+        Appearance npcAppearance = new Appearance();
+        npcAppearance.setMaterial(new Material(
+                new Color3f(0.0f, 1.0f, 0.0f),  // diffuse green
+                new Color3f(0.0f, 0.0f, 0.0f),
+                new Color3f(0.0f, 1.0f, 0.0f),
+                new Color3f(1.0f, 1.0f, 1.0f),
+                64.0f));
+
+        List<Vector3d> validPositions = new ArrayList<>();
+        for (int i = 0; i < MAZE_HEIGHT; i++) {
+            for (int j = 0; j < MAZE_WIDTH; j++) {
+                if (walls[i][j] == 0) {  // Only consider squares without walls.
+                    // Convert maze grid index to scene coordinate.
+                    double x = -1 + i * 0.103;
+                    double z = -1 + j * 0.103;
+                    validPositions.add(new Vector3d(x, 0.1, z));
+                }
+            }
+        }
+        // Decide how many NPCs you want (here, 3).
+        int npcCount = 3;
+        for (int i = 0; i < npcCount; i++) {
+            if (validPositions.isEmpty()) {
+                break; // No more valid positions.
+            }
+            // Pick a random valid position.
+            int randIndex = (int) (Math.random() * validPositions.size());
+            Vector3d npcPos = validPositions.remove(randIndex); // Remove to avoid reuse.
+
+            Transform3D npcTransform = new Transform3D();
+            npcTransform.setTranslation(npcPos);
+            TransformGroup npcTG = new TransformGroup(npcTransform);
+            npcTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
+            Box npcBox = new Box(0.03f, 0.03f, 0.03f, Box.GENERATE_NORMALS, npcAppearance);
+            npcTG.addChild(npcBox);
+            sceneBG.addChild(npcTG);
+        }
+
         return sceneBG;
     }
+
 
     // Helper to add a wall and store its bounding rectangle for collision detection.
     private void addWall(BranchGroup sceneBG, double x, double y, double z,
