@@ -11,6 +11,9 @@ public class GenerateMaze {
     public static int n;
     public static int[][] moves = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
     public static ArrayList<ArrayList<Integer>> getMaze(int height, int width) {
+        //the actual height will be 2 larger than the height of the generated maze, same for width
+        height -= 2;
+        width -= 2;
         grid = new ArrayList<ArrayList<Integer>>();
         m = height;
         n = width;
