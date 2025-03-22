@@ -44,8 +44,7 @@ public class BasicScene extends JPanel {
 
     // List to store NPCs and a constant for their movement step size.
     private List<NPC> npcs = new ArrayList<>();
-    private final double NPC_STEP = 0.02;
-
+    private final double NPC_STEP = 0.01;
 
     // Reference to the universe for camera updates
     private SimpleUniverse universe;
