@@ -42,6 +42,11 @@ public class BasicScene extends JPanel {
     private BufferedReader in;
     private int playerId = 0; // Assigned by the server
 
+    // List to store NPCs and a constant for their movement step size.
+    private List<NPC> npcs = new ArrayList<>();
+    private final double NPC_STEP = 0.02;
+
+
     // Reference to the universe for camera updates
     private SimpleUniverse universe;
 
@@ -197,23 +202,17 @@ public class BasicScene extends JPanel {
                 }
             }
         }
+
         // Decide how many NPCs you want (here, 3).
         int npcCount = 3;
         for (int i = 0; i < npcCount; i++) {
             if (validPositions.isEmpty()) {
-                break; // No more valid positions.
+                break;
             }
-            // Pick a random valid position.
-            int randIndex = (int) (Math.random() * validPositions.size());
-            Vector3d npcPos = validPositions.remove(randIndex); // Remove to avoid reuse.
-
-            Transform3D npcTransform = new Transform3D();
-            npcTransform.setTranslation(npcPos);
-            TransformGroup npcTG = new TransformGroup(npcTransform);
-            npcTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
-            Box npcBox = new Box(0.03f, 0.03f, 0.03f, Box.GENERATE_NORMALS, npcAppearance);
-            npcTG.addChild(npcBox);
-            sceneBG.addChild(npcTG);
+            // Use the NPC factory method to generate an NPC at a random valid position.
+            NPC npc = NPC.generateRandomNPC(validPositions, npcAppearance, NPC_STEP);
+            npcs.add(npc);
+            sceneBG.addChild(npc.getTransformGroup());
         }
 
         return sceneBG;
@@ -298,6 +297,7 @@ public class BasicScene extends JPanel {
 
         sceneBG.compile();
         universe.addBranchGraph(sceneBG);
+        startNPCMovement();
 
         setLayout(new BorderLayout());
         add("Center", canvas);
@@ -333,6 +333,26 @@ public class BasicScene extends JPanel {
         }
         return false;
     }
+
+    /**
+     * Starts a background thread that updates each NPC’s position periodically.
+     */
+    private void startNPCMovement() {
+        new Thread(() -> {
+            while (true) {
+                // Update each NPC using BasicScene's collision detection.
+                for (NPC npc : npcs) {
+                    npc.update((x, z) -> collidesWithWall(x, z));
+                }
+                try {
+                    Thread.sleep(50); // update roughly every 50 milliseconds
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+    }
+
 
     public static void main(String[] args) {
         frame = new JFrame("Basic Scene: Maze View (Networking with Dynamic Camera)");
