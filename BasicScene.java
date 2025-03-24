@@ -21,9 +21,9 @@ public class BasicScene extends JPanel {
     private static final long serialVersionUID = 1L;
     private static JFrame frame;
 
-    // Two boxes for two players (local and remote)
-    private TransformGroup redBoxTG;
-    private TransformGroup blueBoxTG;
+    // Replace boxes with Ghost models for the two players
+    private GhostModel redGhost;
+    private GhostModel blueGhost;
 
     // Player positions (x, y, z) – y remains 0.1
     private Vector3d redBoxPos = new Vector3d(0.0, 0.1, 0.0);
@@ -31,9 +31,11 @@ public class BasicScene extends JPanel {
     // Movement step
     private final double STEP = 0.025;
 
-    // Maze collision: storing each wall’s bounding rectangle and its maze grid coordinates.
+    // Maze collision: storing each wall's bounding rectangle and its maze grid coordinates.
     private HashMap<Rectangle2D.Double, Point> wallBounds = new HashMap<>();
-    private static final double BOX_HALF = 0.03;
+    
+    // Use GhostModel's CHARACTER_HALF for collision detection
+    // private static final double BOX_HALF = 0.03;
 
     // Maze variables
     private static final int MAZE_HEIGHT = 20;
@@ -173,12 +175,12 @@ public class BasicScene extends JPanel {
                     double x = Double.parseDouble(tokens[1]);
                     double y = Double.parseDouble(tokens[2]);
                     double z = Double.parseDouble(tokens[3]);
-                    Transform3D update = new Transform3D();
-                    update.setTranslation(new Vector3d(x, y, z));
-                    if (id == 1) {
-                        redBoxTG.setTransform(update);
-                    } else if (id == 2) {
-                        blueBoxTG.setTransform(update);
+                    
+                    // Update ghost models instead of boxes
+                    if (id == 1 && redGhost != null) {
+                        redGhost.updatePosition(x, z);
+                    } else if (id == 2 && blueGhost != null) {
+                        blueGhost.updatePosition(x, z);
                     }
                 }
             } catch (IOException e) {
@@ -206,36 +208,13 @@ public class BasicScene extends JPanel {
         platformTG.addChild(platform);
         sceneBG.addChild(platformTG);
 
-        // Create red and blue boxes (players).
-        Transform3D redBoxTransform = new Transform3D();
-        redBoxTransform.setTranslation(redBoxPos);
-        redBoxTG = new TransformGroup(redBoxTransform);
-        redBoxTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
-        Appearance redAppearance = new Appearance();
-        redAppearance.setMaterial(new Material(
-                new Color3f(1.0f, 0.0f, 0.0f),
-                new Color3f(0.0f, 0.0f, 0.0f),
-                new Color3f(1.0f, 0.0f, 0.0f),
-                new Color3f(1.0f, 1.0f, 1.0f),
-                64.0f));
-        Box redBox = new Box(0.03f, 0.03f, 0.03f, Box.GENERATE_NORMALS, redAppearance);
-        redBoxTG.addChild(redBox);
-        sceneBG.addChild(redBoxTG);
-
-        Transform3D blueBoxTransform = new Transform3D();
-        blueBoxTransform.setTranslation(blueBoxPos);
-        blueBoxTG = new TransformGroup(blueBoxTransform);
-        blueBoxTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
-        Appearance blueAppearance = new Appearance();
-        blueAppearance.setMaterial(new Material(
-                new Color3f(0.0f, 0.0f, 1.0f),
-                new Color3f(0.0f, 0.0f, 0.0f),
-                new Color3f(0.0f, 0.0f, 1.0f),
-                new Color3f(1.0f, 1.0f, 1.0f),
-                64.0f));
-        Box blueBox = new Box(0.03f, 0.03f, 0.03f, Box.GENERATE_NORMALS, blueAppearance);
-        blueBoxTG.addChild(blueBox);
-        sceneBG.addChild(blueBoxTG);
+        // Create ghost models instead of boxes for players
+        redGhost = new GhostModel(true, redBoxPos);
+        blueGhost = new GhostModel(false, blueBoxPos);
+        
+        // Add ghost models to the scene
+        sceneBG.addChild(redGhost.getTransformGroup());
+        sceneBG.addChild(blueGhost.getTransformGroup());
 
         // Create maze walls.
         Appearance wallAppearance = new Appearance();
@@ -383,15 +362,11 @@ public class BasicScene extends JPanel {
                     if (playerId == 1) {
                         redBoxPos.x = newX;
                         redBoxPos.z = newZ;
-                        Transform3D newTransform = new Transform3D();
-                        newTransform.setTranslation(redBoxPos);
-                        redBoxTG.setTransform(newTransform);
+                        redGhost.updatePosition(newX, newZ);
                     } else if (playerId == 2) {
                         blueBoxPos.x = newX;
                         blueBoxPos.z = newZ;
-                        Transform3D newTransform = new Transform3D();
-                        newTransform.setTranslation(blueBoxPos);
-                        blueBoxTG.setTransform(newTransform);
+                        blueGhost.updatePosition(newX, newZ);
                     }
                     if (out != null) {
                         out.println(playerId + " " + newX + " " + 0.1 + " " + newZ);
@@ -448,7 +423,7 @@ public class BasicScene extends JPanel {
 
     // Collision detection using bounding rectangles.
     private boolean collidesWithWall(double x, double z) {
-        double half = BOX_HALF;
+        double half = GhostModel.getCharacterHalf();
         double side = 2 * half;
         Rectangle2D.Double boxRect = new Rectangle2D.Double(x - half, z - half, side, side);
         for (Rectangle2D.Double wallRect : wallBounds.keySet()) {
