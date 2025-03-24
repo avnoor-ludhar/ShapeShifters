@@ -23,18 +23,21 @@ public class BasicServer {
     public static void main(String[] args) {
         // Initialize maze and designate moving walls.
         maze = GenerateMaze.getMaze(20, 20);
+        // Clear a central area of the maze.
         for (int i = 7; i < 13; i++) {
             for (int j = 7; j < 13; j++) {
                 maze.get(i).set(j, 0);
             }
         }
+        // Randomly remove 10% of walls.
         for (int i = 1; i < MAZE_HEIGHT - 1; i++) {
             for (int j = 1; j < MAZE_WIDTH - 1; j++) {
-                if (Math.random() < 0.1) { // randomly remove 10% of walls
+                if (Math.random() < 0.1) {
                     maze.get(i).set(j, 0);
                 }
             }
         }
+        // Designate 4 moving wall positions.
         Random rand = new Random();
         int movingWallsIndex = 0;
         while (movingWallsIndex < 4) {
@@ -78,16 +81,17 @@ public class BasicServer {
         for (int i = 0; i < npcCount; i++) {
             if (validPositions.isEmpty())
                 break;
+            // Note: Adjusted NPC movement step (0.005) as per group changes.
             NPC npc = NPC.generateRandomNPC(validPositions, npcAppearance, 0.005);
             npcs.add(npc);
         }
 
-        // Update NPC positions and broadcast them.
+        // Update NPC positions periodically and broadcast their states.
         new Thread(() -> {
             while (true) {
                 for (NPC npc : npcs) {
                     npc.update((x, z) -> {
-                        double half = 0.03; // NPC box half size
+                        double half = 0.03; // half-size for collision detection
                         double side = 2 * half;
                         Rectangle2D.Double npcRect = new Rectangle2D.Double(x - half, z - half, side, side);
                         for (int i = 0; i < MAZE_HEIGHT; i++) {
@@ -97,8 +101,10 @@ public class BasicServer {
                                     double wz = -1 + j * 0.103;
                                     double left = wx - 0.055;
                                     double top = wz + 0.055;
+                                    // Assuming each wall has a size of 0.11 in both dimensions.
                                     Rectangle2D.Double wallRect = new Rectangle2D.Double(left, top - 0.11, 0.11, 0.11);
-                                    if (npcRect.intersects(wallRect)) return true;
+                                    if (npcRect.intersects(wallRect))
+                                        return true;
                                 }
                             }
                         }
@@ -108,7 +114,9 @@ public class BasicServer {
                 broadcastNPCPositions();
                 try {
                     Thread.sleep(50);
-                } catch (InterruptedException e) { e.printStackTrace(); }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
         }).start();
 
@@ -160,8 +168,9 @@ public class BasicServer {
             try {
                 out = new PrintWriter(socket.getOutputStream(), true);
                 in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                // Send the player's ID.
+                // Send the player's ID to the client.
                 out.println("ID " + playerId);
+                // Send maze data as a concatenated string.
                 StringBuilder mazeStr = new StringBuilder();
                 for (ArrayList<Integer> row : maze) {
                     for (Integer cell : row) {
@@ -173,7 +182,7 @@ public class BasicServer {
                 for (int[] coords : movingWalls) {
                     out.println(coords[0] + " " + coords[1]);
                 }
-                // Send NPC initialization info.
+                // Send NPC initialization information.
                 out.println("NPC_COUNT " + npcs.size());
                 for (NPC npc : npcs) {
                     Vector3d pos = npc.getPosition();
@@ -202,7 +211,9 @@ public class BasicServer {
             } finally {
                 try {
                     socket.close();
-                } catch (IOException e) { }
+                } catch (IOException e) {
+                    // Ignore
+                }
             }
         }
     }
