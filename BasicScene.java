@@ -452,7 +452,7 @@ public class BasicScene extends JPanel {
         double side = 2 * half;
         Rectangle2D.Double boxRect = new Rectangle2D.Double(x - half, z - half, side, side);
         for (Rectangle2D.Double wallRect : wallBounds.keySet()) {
-            // Check if this wall is moving.
+            // Check if this wall is moving
             Point coords = wallBounds.get(wallRect);
             if (movingWallAlphas.containsKey(coords)) {
                 float alphaValue = movingWallAlphas.get(coords).value();

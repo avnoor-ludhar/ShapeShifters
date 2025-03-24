@@ -1,5 +1,6 @@
 package ShapeShifters;
 
+import java.awt.geom.Rectangle2D;
 import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
@@ -86,9 +87,22 @@ public class BasicServer {
             while (true) {
                 for (NPC npc : npcs) {
                     npc.update((x, z) -> {
-                        int gridX = (int) ((x + 1) / 0.103);
-                        int gridZ = (int) ((z + 1) / 0.103);
-                        return maze.get(gridX).get(gridZ) == 1;
+                        double half = 0.03; // NPC box half size
+                        double side = 2 * half;
+                        Rectangle2D.Double npcRect = new Rectangle2D.Double(x - half, z - half, side, side);
+                        for (int i = 0; i < MAZE_HEIGHT; i++) {
+                            for (int j = 0; j < MAZE_WIDTH; j++) {
+                                if (maze.get(i).get(j) == 1) {
+                                    double wx = -1 + i * 0.103;
+                                    double wz = -1 + j * 0.103;
+                                    double left = wx - 0.055;
+                                    double top = wz + 0.055;
+                                    Rectangle2D.Double wallRect = new Rectangle2D.Double(left, top - 0.11, 0.11, 0.11);
+                                    if (npcRect.intersects(wallRect)) return true;
+                                }
+                            }
+                        }
+                        return false;
                     });
                 }
                 broadcastNPCPositions();

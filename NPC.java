@@ -52,15 +52,15 @@ public class NPC {
         double newX = position.x + direction.x * step;
         double newZ = position.z + direction.z * step;
 
-        // Grid-based collision detection
-        int gridX = (int) Math.floor((newX + 1) / 0.103);
-        int gridZ = (int) Math.floor((newZ + 1) / 0.103);
-
-        // Check both grid-based and rectangle-based collision
         if (checker.collides(newX, newZ)) {
-            // If collision detected, randomly change direction
-            direction = randomizeDirection();
-            return;
+            // Try turning up to 4 times
+            for (int i = 0; i < 4; i++) {
+                direction = randomizeDirection();
+                newX = position.x + direction.x * step;
+                newZ = position.z + direction.z * step;
+                if (!checker.collides(newX, newZ)) break;
+            }
+            if (checker.collides(newX, newZ)) return; // No valid move found
         }
 
         position.x = newX;
@@ -70,6 +70,7 @@ public class NPC {
         transform.setTranslation(new Vector3d(position.x, 0.1, position.z));
         npcTG.setTransform(transform);
     }
+
 
     // Helper method to randomize direction when collision occurs
     private Vector3d randomizeDirection() {
