@@ -19,6 +19,7 @@ public class BasicServer {
     private static int[][] movingWalls = new int[4][2];
     private static final int MAZE_HEIGHT = 20;
     private static final int MAZE_WIDTH = 20;
+    private static String treasureMsg;
 
     public static void main(String[] args) {
         // Initialize maze and designate moving walls.
@@ -68,6 +69,11 @@ public class BasicServer {
                 }
             }
         }
+
+        // Generate treasure coordinates from one valid position.
+        Vector3d treasurePos = validPositions.get(rand.nextInt(validPositions.size()));
+        treasureMsg = "TREASURE " + treasurePos.x + " " + treasurePos.y + " " + treasurePos.z;
+        validPositions.remove(treasurePos);
 
         // Create 3 NPCs with a green appearance.
         Appearance npcAppearance = new Appearance();
@@ -189,6 +195,9 @@ public class BasicServer {
                     Vector3d dir = npc.getDirection();
                     out.println("NPC_INIT " + pos.x + " " + pos.z + " " + dir.x + " " + dir.z);
                 }
+
+                // Send treasure coordinates.
+                out.println(treasureMsg);
             } catch (IOException e) {
                 e.printStackTrace();
             }

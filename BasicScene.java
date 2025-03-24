@@ -15,6 +15,8 @@ import javax.swing.JFrame;
 import javax.swing.JPanel;
 import org.jogamp.java3d.*;
 import org.jogamp.java3d.utils.geometry.Box;
+import org.jogamp.java3d.utils.geometry.Primitive;
+import org.jogamp.java3d.utils.geometry.Sphere;
 import org.jogamp.java3d.utils.image.TextureLoader;
 import org.jogamp.java3d.utils.universe.SimpleUniverse;
 import org.jogamp.vecmath.*;
@@ -81,6 +83,9 @@ public class BasicScene extends JPanel {
     private Shape3D shootingStarShape;
     private PointArray shootingStarPoints;
     private Random random = new Random();
+
+    private TransformGroup treasureGroup; // Reference to the treasure's TransformGroup
+    private Appearance treasureAppearance; // Appearance for the treasure
 
     // Fields for IP address and username
     private String ipAddress;
@@ -161,6 +166,9 @@ public class BasicScene extends JPanel {
                     }
                 }
             }
+
+            String treasureCoordsLine = in.readLine();
+            System.out.println(treasureCoordsLine);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -576,6 +584,31 @@ public class BasicScene extends JPanel {
                 e.printStackTrace();
             }
         }).start();
+    }
+
+    private TransformGroup createTreasure(double x, double y, double z) {
+        // Define treasure appearance (gold material)
+        if (treasureAppearance == null) {
+            treasureAppearance = new Appearance();
+            treasureAppearance.setMaterial(new Material(
+                    new Color3f(1.0f, 0.84f, 0.0f), // Ambient
+                    new Color3f(0.0f, 0.0f, 0.0f), // Emissive
+                    new Color3f(1.0f, 0.84f, 0.0f), // Diffuse
+                    new Color3f(1.0f, 1.0f, 1.0f), // Specular
+                    64.0f // Shininess
+            ));
+        }
+
+        // Create a sphere to represent the treasure
+        Sphere treasureSphere = new Sphere(0.02f, Primitive.GENERATE_NORMALS, treasureAppearance);
+
+        // Position the treasure
+        Transform3D treasureTransform = new Transform3D();
+        treasureTransform.setTranslation(new Vector3d(x, y, z));
+        TransformGroup tg = new TransformGroup(treasureTransform);
+        tg.addChild(treasureSphere);
+
+        return tg;
     }
 
     // --- Main ---
