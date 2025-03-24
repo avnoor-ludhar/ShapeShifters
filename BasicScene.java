@@ -5,6 +5,8 @@ import java.awt.GraphicsConfiguration;
 import java.awt.Point;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.geom.Rectangle2D;
 import java.io.*;
 import java.net.*;
@@ -13,6 +15,7 @@ import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
+import javax.swing.Timer;
 import org.jogamp.java3d.*;
 import org.jogamp.java3d.utils.geometry.Box;
 import org.jogamp.java3d.utils.image.TextureLoader;
@@ -23,15 +26,16 @@ public class BasicScene extends JPanel {
     private static final long serialVersionUID = 1L;
     private static JFrame frame;
 
-    // Ghost models for players (group version uses GhostModel instead of simple boxes)
+    // Ghost models for players (using GhostModel)
     private GhostModel redGhost;
     private GhostModel blueGhost;
 
-    // Positions (only x and z change; y remains constant at 0.1)
-    private Vector3d redPos = new Vector3d(0.0, 0.1, 0.0);
-    private Vector3d bluePos = new Vector3d(0.0, 0.1, 0.0);
-    // Movement step (using group’s step)
-    private final double STEP = 0.025;
+    // Player positions (x, y, z) – y remains constant at 0.1.
+    // Using the "box" version from stashed changes.
+    private Vector3d redBoxPos = new Vector3d(0.0, 0.1, 0.0);
+    private Vector3d blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
+    // Movement step (reduced from 0.025 to 0.010 for slower movement)
+    private final double STEP = 0.010;
 
     // Maze collision data: each wall’s bounding rectangle (and its grid coordinates)
     private HashMap<Rectangle2D.Double, Point> wallBounds = new HashMap<>();
@@ -72,6 +76,12 @@ public class BasicScene extends JPanel {
     private static final float SPOTLIGHT_RADIUS = 0.5f;
     private static final float SPOTLIGHT_CONCENTRATION = 50.0f;
     private static final float SPOTLIGHT_SPREAD_ANGLE = (float) Math.PI / 6;
+
+    // Movement state booleans for smooth movement
+    private boolean upPressed = false;
+    private boolean downPressed = false;
+    private boolean leftPressed = false;
+    private boolean rightPressed = false;
 
     // Star system (from your local version)
     private static final int STAR_COUNT = 15000;
@@ -193,7 +203,6 @@ public class BasicScene extends JPanel {
                     double x = Double.parseDouble(tokens[1]);
                     double y = Double.parseDouble(tokens[2]);
                     double z = Double.parseDouble(tokens[3]);
-                    // Update ghost models accordingly.
                     if (id == 1 && redGhost != null) {
                         redGhost.updatePosition(x, z);
                     } else if (id == 2 && blueGhost != null) {
@@ -212,20 +221,21 @@ public class BasicScene extends JPanel {
 
         // Set background color to black.
         Background background = new Background(new Color3f(0.0f, 0.0f, 0.0f));
-        BoundingSphere bounds = new BoundingSphere(new Point3d(0,0,0), 100.0);
+        BoundingSphere bounds = new BoundingSphere(new Point3d(0, 0, 0), 100.0);
         background.setApplicationBounds(bounds);
         sceneBG.addChild(background);
 
-        // Create dynamic star system (from local version).
+        // Create dynamic star system.
         createStarSystem(sceneBG);
 
         // Create platform with textured floor.
         Appearance platformAppearance = new Appearance();
+        // You can adjust the platform material for a darker look if desired.
         platformAppearance.setMaterial(new Material(
-                new Color3f(0.8f,0.8f,0.8f),
-                new Color3f(0.2f,0.2f,0.2f),
-                new Color3f(0.8f,0.8f,0.8f),
-                new Color3f(1.0f,1.0f,1.0f),
+                new Color3f(0.0f, 0.0f, 0.0f),
+                new Color3f(0.2f, 0.2f, 0.2f),
+                new Color3f(0.8f, 0.8f, 0.8f),
+                new Color3f(1.0f, 1.0f, 1.0f),
                 64.0f));
         String floorTexturePath = "src/ShapeShifters/Textures/QuartzFloorTexture.jpg";
         try {
@@ -246,8 +256,8 @@ public class BasicScene extends JPanel {
         sceneBG.addChild(platformTG);
 
         // Create ghost models for players.
-        redGhost = new GhostModel(true, redPos);
-        blueGhost = new GhostModel(false, bluePos);
+        redGhost = new GhostModel(true, redBoxPos);
+        blueGhost = new GhostModel(false, blueBoxPos);
         sceneBG.addChild(redGhost.getTransformGroup());
         sceneBG.addChild(blueGhost.getTransformGroup());
 
@@ -268,20 +278,20 @@ public class BasicScene extends JPanel {
             e.printStackTrace();
         }
         Material wallMat = new Material();
-        wallMat.setDiffuseColor(new Color3f(1.0f,1.0f,1.0f));
+        wallMat.setDiffuseColor(new Color3f(1.0f, 1.0f, 1.0f));
         wallAppearance.setMaterial(wallMat);
 
-        // Add some ambient and directional lighting.
-        AmbientLight ambientLight = new AmbientLight(new Color3f(1.0f,1.0f,1.0f));
+        // Add ambient and directional lighting.
+        AmbientLight ambientLight = new AmbientLight(new Color3f(1.0f, 1.0f, 1.0f));
         ambientLight.setInfluencingBounds(bounds);
         sceneBG.addChild(ambientLight);
         DirectionalLight directionalLight = new DirectionalLight(
-                new Color3f(1.0f,1.0f,1.0f),
-                new Vector3f(-1.0f,-1.0f,-1.0f));
+                new Color3f(1.0f, 1.0f, 1.0f),
+                new Vector3f(-1.0f, -1.0f, -1.0f));
         directionalLight.setInfluencingBounds(bounds);
         sceneBG.addChild(directionalLight);
 
-        // (Optional) Clear a central area in the maze if desired.
+        // Clear a central area in the maze.
         for (int i = 5; i < 15; i++) {
             for (int j = 5; j < 15; j++) {
                 walls[i][j] = 0;
@@ -295,7 +305,7 @@ public class BasicScene extends JPanel {
                             -1 + i * 0.103f, 0.1f, -1 + j * 0.103f,
                             0.055f, 0.05f, 0.055f,
                             wallAppearance, i, j);
-                    // If this wall is moving, add an interpolator.
+                    // If this wall is moving, add a PositionInterpolator.
                     if (movingWalls.contains(new Point(i, j))) {
                         tg.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
                         tg.setCapability(TransformGroup.ALLOW_TRANSFORM_READ);
@@ -303,7 +313,7 @@ public class BasicScene extends JPanel {
                         axis.rotZ(Math.PI / 2);
                         Alpha a = movingWallAlphas.get(new Point(i, j));
                         PositionInterpolator interpolator = new PositionInterpolator(a, tg, axis, 0f, -0.101f);
-                        interpolator.setSchedulingBounds(new BoundingSphere(new Point3d(0,0,0), 100.0));
+                        interpolator.setSchedulingBounds(new BoundingSphere(new Point3d(0, 0, 0), 100.0));
                         tg.addChild(interpolator);
                     }
                     sceneBG.addChild(tg);
@@ -330,11 +340,11 @@ public class BasicScene extends JPanel {
                                    double width, double height, double depth,
                                    Appearance appearance, int i, int j) {
         Transform3D transform = new Transform3D();
-        transform.setTranslation(new Vector3d(x,y,z));
+        transform.setTranslation(new Vector3d(x, y, z));
         TransformGroup tg = new TransformGroup(transform);
         TransformGroup container = new TransformGroup();
         container.addChild(tg);
-        Box wall = new Box((float)width, (float)height, (float)depth,
+        Box wall = new Box((float) width, (float) height, (float) depth,
                 Box.GENERATE_NORMALS | Box.GENERATE_TEXTURE_COORDS, appearance);
         tg.addChild(wall);
         double left = x - width;
@@ -343,7 +353,7 @@ public class BasicScene extends JPanel {
         double rectHeight = 2 * depth;
         double bottom = top - rectHeight;
         Rectangle2D.Double wallRect = new Rectangle2D.Double(left, bottom, rectWidth, rectHeight);
-        wallBounds.put(wallRect, new Point(i,j));
+        wallBounds.put(wallRect, new Point(i, j));
         return container;
     }
 
@@ -351,10 +361,10 @@ public class BasicScene extends JPanel {
     private void createSpotlight(BranchGroup sceneBG) {
         spotlightTG = new TransformGroup();
         spotlightTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
-        Point3f initialPosition = new Point3f(0.0f,0.3f,0.0f);
-        Vector3f initialDirection = new Vector3f(0.0f,-1.0f,0.0f);
-        Color3f lightColor = new Color3f(1.0f,1.0f,1.0f);
-        spotlight = new SpotLight(lightColor, initialPosition, new Point3f(1.0f,0.5f,0.1f),
+        Point3f initialPosition = new Point3f(0.0f, 0.3f, 0.0f);
+        Vector3f initialDirection = new Vector3f(0.0f, -1.0f, 0.0f);
+        Color3f lightColor = new Color3f(1.0f, 1.0f, 1.0f);
+        spotlight = new SpotLight(lightColor, initialPosition, new Point3f(1.0f, 0.5f, 0.1f),
                 initialDirection, SPOTLIGHT_SPREAD_ANGLE, SPOTLIGHT_CONCENTRATION);
         spotlight.setCapability(Light.ALLOW_STATE_WRITE);
         Transform3D lightTransform = new Transform3D();
@@ -362,7 +372,7 @@ public class BasicScene extends JPanel {
         TransformGroup spotlightTransformGroup = new TransformGroup(lightTransform);
         spotlightTransformGroup.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
         spotlightTransformGroup.addChild(spotlight);
-        lightBounds = new BoundingSphere(new Point3d(0,0,0), 100.0);
+        lightBounds = new BoundingSphere(new Point3d(0, 0, 0), 100.0);
         spotlight.setInfluencingBounds(lightBounds);
         sceneBG.addChild(spotlightTransformGroup);
         spotlightTG = spotlightTransformGroup;
@@ -370,7 +380,7 @@ public class BasicScene extends JPanel {
 
     // Set ambient light to complete darkness.
     private void setDarkAmbientLight(BranchGroup sceneBG) {
-        Color3f ambientColor = new Color3f(0.0f,0.0f,0.0f);
+        Color3f ambientColor = new Color3f(0.0f, 0.0f, 0.0f);
         AmbientLight ambientLight = new AmbientLight(ambientColor);
         ambientLight.setInfluencingBounds(lightBounds);
         sceneBG.addChild(ambientLight);
@@ -380,66 +390,119 @@ public class BasicScene extends JPanel {
     public void setupUniverse(BranchGroup sceneBG) {
         GraphicsConfiguration config = SimpleUniverse.getPreferredConfiguration();
         Canvas3D canvas = new Canvas3D(config);
+
+        // Set up key listener to update movement state.
         canvas.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
-                double newX, newZ;
-                if (playerId == 1) {
-                    newX = redPos.x;
-                    newZ = redPos.z;
-                } else {
-                    newX = bluePos.x;
-                    newZ = bluePos.z;
-                }
                 switch (e.getKeyChar()) {
-                    case 'w': newZ -= STEP; break;
-                    case 's': newZ += STEP; break;
-                    case 'a': newX -= STEP; break;
-                    case 'd': newX += STEP; break;
-                    default: return;
+                    case 'w': upPressed = true; break;
+                    case 's': downPressed = true; break;
+                    case 'a': leftPressed = true; break;
+                    case 'd': rightPressed = true; break;
+                    default:
+                        break;
                 }
-                if (!collidesWithWall(newX, newZ)) {
-                    if (playerId == 1) {
-                        redPos.x = newX;
-                        redPos.z = newZ;
-                        redGhost.updatePosition(newX, newZ);
-                    } else {
-                        bluePos.x = newX;
-                        bluePos.z = newZ;
-                        blueGhost.updatePosition(newX, newZ);
-                    }
-                    if (out != null) {
-                        out.println(playerId + " " + newX + " " + 0.1 + " " + newZ);
-                    }
-                    updateCamera();
-                    updateSpotlight();
-                    if (System.currentTimeMillis() - lastFootstepTime > FOOTSTEP_COOLDOWN) {
-                        playFootstepSound();
-                        lastFootstepTime = System.currentTimeMillis();
-                    }
-                } else {
-                    if (System.currentTimeMillis() - lastCollisionTime > COLLISION_COOLDOWN) {
-                        playWallCollisionSound();
-                        lastCollisionTime = System.currentTimeMillis();
-                    }
+            }
+            @Override
+            public void keyReleased(KeyEvent e) {
+                switch (e.getKeyChar()) {
+                    case 'w': upPressed = false; break;
+                    case 's': downPressed = false; break;
+                    case 'a': leftPressed = false; break;
+                    case 'd': rightPressed = false; break;
+                    default:
+                        break;
                 }
             }
         });
         canvas.setFocusable(true);
         canvas.requestFocusInWindow();
+
+        // Timer for smooth continuous movement (approx. 60fps).
+        Timer movementTimer = new Timer(16, new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                updateMovement();
+            }
+        });
+        movementTimer.start();
+
         universe = new SimpleUniverse(canvas);
         updateCamera();
+        updateSpotlight();
         universe.addBranchGraph(sceneBG);
         setLayout(new BorderLayout());
         add("Center", canvas);
     }
 
-    // Update the camera to follow the local player's ghost.
+    // Update the player's movement based on key states.
+    private void updateMovement() {
+        double newX, newZ;
+        if (playerId == 1) {
+            newX = redBoxPos.x;
+            newZ = redBoxPos.z;
+        } else {
+            newX = blueBoxPos.x;
+            newZ = blueBoxPos.z;
+        }
+        double dx = 0, dz = 0;
+        if (upPressed) {
+            dz -= STEP;
+        }
+        if (downPressed) {
+            dz += STEP;
+        }
+        if (leftPressed) {
+            dx -= STEP;
+        }
+        if (rightPressed) {
+            dx += STEP;
+        }
+        // Normalize diagonal movement to keep speed consistent.
+        if (dx != 0 || dz != 0) {
+            double length = Math.sqrt(dx * dx + dz * dz);
+            dx = dx / length * STEP;
+            dz = dz / length * STEP;
+        }
+        newX += dx;
+        newZ += dz;
+
+        if (!collidesWithWall(newX, newZ)) {
+            if (playerId == 1) {
+                redBoxPos.x = newX;
+                redBoxPos.z = newZ;
+                redGhost.updatePosition(newX, newZ);
+            } else {
+                blueBoxPos.x = newX;
+                blueBoxPos.z = newZ;
+                blueGhost.updatePosition(newX, newZ);
+            }
+            if (out != null) {
+                out.println(playerId + " " + newX + " " + 0.1 + " " + newZ);
+            }
+            updateCamera();
+            updateSpotlight();
+            if ((dx != 0 || dz != 0) && (System.currentTimeMillis() - lastFootstepTime > FOOTSTEP_COOLDOWN)) {
+                playFootstepSound();
+                lastFootstepTime = System.currentTimeMillis();
+            }
+        } else {
+            if (System.currentTimeMillis() - lastCollisionTime > COLLISION_COOLDOWN) {
+                playWallCollisionSound();
+                lastCollisionTime = System.currentTimeMillis();
+            }
+        }
+    }
+
+    // Update the camera so it follows the local player's box.
     private void updateCamera() {
-        Vector3d localPos = (playerId == 1) ? redPos : bluePos;
-        Point3d eye = new Point3d(localPos.x, localPos.y + 1.5, localPos.z + 1.0);
+        Vector3d localPos = (playerId == 1) ? redBoxPos : blueBoxPos;
+        // Slightly lower the vertical offset for a better view
+        Point3d eye = new Point3d(localPos.x, localPos.y + 1.2, localPos.z + 1.0);
         Point3d center = new Point3d(localPos.x, localPos.y, localPos.z);
-        Vector3d up = new Vector3d(0,0,-1);
+        // Using an up vector (0,0,-1) as in your code; adjust if necessary.
+        Vector3d up = new Vector3d(0, 0, -1);
         Transform3D viewTransform = new Transform3D();
         viewTransform.lookAt(eye, center, up);
         viewTransform.invert();
@@ -448,7 +511,8 @@ public class BasicScene extends JPanel {
 
     // Update spotlight position.
     private void updateSpotlight() {
-        Vector3d localPos = (playerId == 1) ? redPos : bluePos;
+        // Use the same position vector as for movement.
+        Vector3d localPos = (playerId == 1) ? redBoxPos : blueBoxPos;
         Transform3D spotlightTransform = new Transform3D();
         Vector3d spotlightPos = new Vector3d(localPos.x, 0.3, localPos.z);
         spotlightTransform.setTranslation(spotlightPos);
@@ -473,7 +537,7 @@ public class BasicScene extends JPanel {
         return false;
     }
 
-    // Play footstep sound.
+    // Play footstep sound effect.
     private void playFootstepSound() {
         try {
             File soundFile = new File("src/ShapeShifters/sounds/footsteps.wav");
@@ -481,12 +545,12 @@ public class BasicScene extends JPanel {
             javax.sound.sampled.Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
             clip.start();
-        } catch(Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    // Play wall collision sound.
+    // Play wall collision sound effect.
     private void playWallCollisionSound() {
         try {
             File soundFile = new File("src/ShapeShifters/sounds/wallCollide.wav");
@@ -494,7 +558,7 @@ public class BasicScene extends JPanel {
             javax.sound.sampled.Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
             clip.start();
-        } catch(Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
@@ -513,7 +577,7 @@ public class BasicScene extends JPanel {
             float x = (float)(STAR_FIELD_RADIUS * Math.sin(phi) * Math.cos(theta));
             float y = (float)(STAR_FIELD_RADIUS * Math.sin(phi) * Math.sin(theta));
             float z = (float)(STAR_FIELD_RADIUS * Math.cos(phi));
-            starPoints.setCoordinate(i, new Point3f(x,y,z));
+            starPoints.setCoordinate(i, new Point3f(x, y, z));
             float brightness = 0.5f + random.nextFloat() * 0.5f;
             starPoints.setColor(i, new Color3f(brightness, brightness, brightness));
         }
@@ -549,8 +613,8 @@ public class BasicScene extends JPanel {
         float x = STAR_FIELD_RADIUS * 0.9f;
         float y = (float)(STAR_FIELD_RADIUS * 0.7f * Math.sin(angle));
         float z = (float)(STAR_FIELD_RADIUS * 0.7f * Math.cos(angle));
-        shootingStarPoints.setCoordinate(index, new Point3f(x,y,z));
-        shootingStarPoints.setColor(index, new Color3f(1.0f,0.9f,0.5f));
+        shootingStarPoints.setCoordinate(index, new Point3f(x, y, z));
+        shootingStarPoints.setColor(index, new Color3f(1.0f, 0.9f, 0.5f));
     }
 
     // Animate shooting stars.
@@ -586,7 +650,7 @@ public class BasicScene extends JPanel {
         BranchGroup sceneBG = basicScene.createScene();
         basicScene.setupUniverse(sceneBG);
         frame.getContentPane().add(basicScene);
-        frame.setSize(800,800);
+        frame.setSize(800, 800);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setVisible(true);
     }
