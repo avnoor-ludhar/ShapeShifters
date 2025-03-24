@@ -1,6 +1,4 @@
 package ShapeShifters;
-
-import ShapeShiftersLocal.BasicScene;
 import org.jogamp.java3d.BranchGroup;
 
 import javax.swing.*;
@@ -220,7 +218,7 @@ public class GameMenu extends JFrame {
     // Immediately loads the game logo image from the specified file path.
     private void loadGameLogo() {
         try {
-            String imagePath = "/Users/aleksavucak/Desktop/COMP2800AV/src/ShapeShifters/Textures/MenuTexture.png";
+            String imagePath = "src/ShapeShifters/Textures/MenuTexture.png";
             ImageIcon imageIcon = new ImageIcon(imagePath);
             if (imageIcon.getIconWidth() > 0) {
                 Image img = imageIcon.getImage();
@@ -272,7 +270,7 @@ public class GameMenu extends JFrame {
                 loadingDialog.setVisible(true);
                 dispose();
 
-                ShapeShiftersLocal.BasicScene game = new BasicScene(ipAddress, username);
+                BasicScene game = new BasicScene(ipAddress, username);
                 BranchGroup sceneBG = game.createScene();
                 game.setupUniverse(sceneBG);
 
