@@ -10,7 +10,6 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 import javax.sound.sampled.*;
-import javax.sound.sampled.Clip;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import org.jogamp.java3d.*;
@@ -29,7 +28,7 @@ public class BasicScene extends JPanel {
     // Player positions (x, y, z) – y remains 0.1
     private Vector3d redBoxPos = new Vector3d(0.0, 0.1, 0.0);
     private Vector3d blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
-    // Movement step (using the smaller step from branch two)
+    // Movement step
     private final double STEP = 0.025;
 
     // Maze collision: storing each wall’s bounding rectangle and its maze grid coordinates.
@@ -41,7 +40,7 @@ public class BasicScene extends JPanel {
     private static final int MAZE_WIDTH = 20;
     private static int[][] walls = new int[MAZE_HEIGHT][MAZE_WIDTH];
 
-    // Moving wall data (from branch one)
+    // Moving wall data
     private static HashSet<Point> movingWalls = new HashSet<>();
     private static HashMap<Point, Alpha> movingWallAlphas = new HashMap<>();
 
@@ -51,7 +50,7 @@ public class BasicScene extends JPanel {
     private BufferedReader in;
     private int playerId = 0; // Assigned by the server
 
-    // NPC list and related appearance (from branch one)
+    // NPC list and related appearance
     private List<NPC> npcs = new ArrayList<>();
     private final double NPC_STEP = 0.01;
     private Appearance npcAppearance;
@@ -59,13 +58,13 @@ public class BasicScene extends JPanel {
     // 3D universe reference
     private SimpleUniverse universe;
 
-    // Sound effect variables (from branch two)
+    // Sound effect variables
     private long lastFootstepTime = 0;
     private long lastCollisionTime = 0;
     private static final long FOOTSTEP_COOLDOWN = 250; // milliseconds
     private static final long COLLISION_COOLDOWN = 400; // milliseconds
 
-    // Spotlight variables (from branch two)
+    // Spotlight variables
     private SpotLight spotlight;
     private TransformGroup spotlightTG;
     private BoundingSphere lightBounds;
@@ -447,15 +446,20 @@ public class BasicScene extends JPanel {
         spotlightTG.setTransform(spotlightTransform);
     }
 
-    // Simple collision detection using bounding rectangles.
+    // Collision detection using bounding rectangles.
     private boolean collidesWithWall(double x, double z) {
         double half = BOX_HALF;
         double side = 2 * half;
         Rectangle2D.Double boxRect = new Rectangle2D.Double(x - half, z - half, side, side);
         for (Rectangle2D.Double wallRect : wallBounds.keySet()) {
+            // Check if this wall is moving.
             Point coords = wallBounds.get(wallRect);
-            if (movingWallAlphas.containsKey(coords) && movingWallAlphas.get(coords).value() == 1) {
-                return false;
+            if (movingWallAlphas.containsKey(coords)) {
+                float alphaValue = movingWallAlphas.get(coords).value();
+                // If the wall is "open" (alpha > 0.95), skip collision for this wall.
+                if (alphaValue > 0.95) {
+                    continue;
+                }
             }
             if (wallRect.intersects(boxRect)) {
                 return true;
@@ -469,7 +473,7 @@ public class BasicScene extends JPanel {
         try {
             File soundFile = new File("src/ShapeShifters/sounds/footsteps.wav");
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
-            Clip clip = AudioSystem.getClip();
+            javax.sound.sampled.Clip clip = javax.sound.sampled.AudioSystem.getClip();
             clip.open(audioIn);
             clip.start();
         } catch (Exception e) {
@@ -482,7 +486,7 @@ public class BasicScene extends JPanel {
         try {
             File soundFile = new File("src/ShapeShifters/sounds/wallCollide.wav");
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
-            Clip clip = AudioSystem.getClip();
+            javax.sound.sampled.Clip clip = javax.sound.sampled.AudioSystem.getClip();
             clip.open(audioIn);
             clip.start();
         } catch (Exception e) {

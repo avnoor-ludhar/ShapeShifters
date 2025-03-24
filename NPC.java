@@ -52,10 +52,15 @@ public class NPC {
         double newX = position.x + direction.x * step;
         double newZ = position.z + direction.z * step;
 
+        // Grid-based collision detection
+        int gridX = (int) Math.floor((newX + 1) / 0.103);
+        int gridZ = (int) Math.floor((newZ + 1) / 0.103);
+
+        // Check both grid-based and rectangle-based collision
         if (checker.collides(newX, newZ)) {
-            direction.scale(-1);
-            newX = position.x + direction.x * step;
-            newZ = position.z + direction.z * step;
+            // If collision detected, randomly change direction
+            direction = randomizeDirection();
+            return;
         }
 
         position.x = newX;
@@ -64,6 +69,18 @@ public class NPC {
         Transform3D transform = new Transform3D();
         transform.setTranslation(new Vector3d(position.x, 0.1, position.z));
         npcTG.setTransform(transform);
+    }
+
+    // Helper method to randomize direction when collision occurs
+    private Vector3d randomizeDirection() {
+        Random rand = new Random();
+        int choice = rand.nextInt(4);
+        switch (choice) {
+            case 0: return new Vector3d(1, 0, 0);
+            case 1: return new Vector3d(-1, 0, 0);
+            case 2: return new Vector3d(0, 0, 1);
+            default: return new Vector3d(0, 0, -1);
+        }
     }
 
     /**

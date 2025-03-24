@@ -77,7 +77,7 @@ public class BasicServer {
         for (int i = 0; i < npcCount; i++) {
             if (validPositions.isEmpty())
                 break;
-            NPC npc = NPC.generateRandomNPC(validPositions, npcAppearance, 0.01);
+            NPC npc = NPC.generateRandomNPC(validPositions, npcAppearance, 0.005);
             npcs.add(npc);
         }
 
