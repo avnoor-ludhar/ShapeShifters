@@ -21,8 +21,10 @@ import org.jogamp.java3d.utils.geometry.Box;
 import org.jogamp.java3d.utils.geometry.Primitive;
 import org.jogamp.java3d.utils.geometry.Sphere;
 import org.jogamp.java3d.utils.image.TextureLoader;
+import org.jogamp.java3d.utils.picking.PickResult;
 import org.jogamp.java3d.utils.universe.SimpleUniverse;
 import org.jogamp.vecmath.*;
+import org.jogamp.java3d.utils.picking.PickTool;
 
 public class BasicScene extends JPanel {
     private static final long serialVersionUID = 1L;
@@ -100,6 +102,10 @@ public class BasicScene extends JPanel {
     // Fields for IP address and username
     private String ipAddress;
     private String username;
+    private Canvas3D canvas;
+    private BranchGroup rootBG;
+
+
 
     // --- Constructors ---
     // Default constructor uses localhost and a default username.
@@ -178,7 +184,13 @@ public class BasicScene extends JPanel {
             }
 
             String treasureCoordsLine = in.readLine();
-            System.out.println(treasureCoordsLine);
+            if (treasureCoordsLine != null && treasureCoordsLine.startsWith("TREASURE")) {
+                String[] parts = treasureCoordsLine.split(" ");
+                double tx = Double.parseDouble(parts[1]);
+                double ty = Double.parseDouble(parts[2]);
+                double tz = Double.parseDouble(parts[3]);
+                treasureGroup = createTreasure(tx, 0.4, tz);
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -334,10 +346,16 @@ public class BasicScene extends JPanel {
             sceneBG.addChild(npc.getTransformGroup());
         }
 
+        if (treasureGroup != null) {
+            sceneBG.addChild(treasureGroup);
+        }
+
         // Create a spotlight that follows the player.
         createSpotlight(sceneBG);
         // Add dark ambient light.
         setDarkAmbientLight(sceneBG);
+
+        this.rootBG = sceneBG;
 
         sceneBG.compile();
         return sceneBG;
@@ -397,7 +415,7 @@ public class BasicScene extends JPanel {
     // Universe and input setup.
     public void setupUniverse(BranchGroup sceneBG) {
         GraphicsConfiguration config = SimpleUniverse.getPreferredConfiguration();
-        Canvas3D canvas = new Canvas3D(config);
+        canvas = new Canvas3D(config);
 
         // Set up key listener to update movement state.
         canvas.addKeyListener(new KeyAdapter() {
@@ -424,6 +442,60 @@ public class BasicScene extends JPanel {
                 }
             }
         });
+
+        canvas.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (treasureGroup == null || rootBG == null) return;  // No treasure or scene
+
+                int x = e.getX();
+                int y = e.getY();
+
+                Point3d clickPoint = new Point3d();
+                Point3d eyePoint = new Point3d();
+                canvas.getPixelLocationInImagePlate(x, y, clickPoint);
+                canvas.getCenterEyeInImagePlate(eyePoint);
+
+                Transform3D ipToVworld = new Transform3D();
+                canvas.getImagePlateToVworld(ipToVworld);
+                ipToVworld.transform(clickPoint);
+                ipToVworld.transform(eyePoint);
+
+                Vector3d rayDir = new Vector3d();
+                rayDir.sub(clickPoint, eyePoint);
+                rayDir.normalize();
+
+                // Use the entire scene's BranchGroup as the pick root.
+                PickTool pickTool = new PickTool(rootBG);
+                pickTool.setMode(PickTool.BOUNDS);
+                pickTool.setShapeRay(clickPoint, rayDir);
+
+                PickResult pr = pickTool.pickClosest();
+                if (pr != null) {
+                    Node pickedNode = pr.getNode(PickResult.SHAPE3D);
+                    if (pickedNode != null) {
+                        // Traverse up the parent chain.
+                        Node current = pickedNode;
+                        boolean found = false;
+                        while (current != null) {
+                            Object userData = current.getUserData();
+                            if (userData != null && "treasure".equals(userData.toString())) {
+                                System.out.println("clicked");
+                                found = true;
+                                break;
+                            }
+                            current = current.getParent();
+                        }
+                        if (!found) {
+                            System.out.println("Picked shape is not treasure.");
+                        }
+                    } else {
+                        System.out.println("No Shape3D picked.");
+                    }
+                }
+            }
+        });
+
         canvas.setFocusable(true);
         canvas.requestFocusInWindow();
 
@@ -664,13 +736,18 @@ public class BasicScene extends JPanel {
         }
 
         // Create a sphere to represent the treasure
-        Sphere treasureSphere = new Sphere(0.02f, Primitive.GENERATE_NORMALS, treasureAppearance);
+        Sphere treasureSphere = new Sphere(0.1f, Primitive.GENERATE_NORMALS, treasureAppearance);
+
+        treasureSphere.setPickable(true);
 
         // Position the treasure
         Transform3D treasureTransform = new Transform3D();
         treasureTransform.setTranslation(new Vector3d(x, y, z));
         TransformGroup tg = new TransformGroup(treasureTransform);
         tg.addChild(treasureSphere);
+
+        tg.setUserData("treasure");
+
 
         return tg;
     }
