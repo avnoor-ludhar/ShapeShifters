@@ -21,33 +21,29 @@ public class BasicServer {
 
     public static void main(String[] args) {
         // Initialize maze and designate moving walls.
-        maze = GenerateMaze.getMaze(MAZE_HEIGHT, MAZE_WIDTH);
-        // Clear a central square in the maze.
+        maze = GenerateMaze.getMaze(20, 20);
         for (int i = 7; i < 13; i++) {
             for (int j = 7; j < 13; j++) {
                 maze.get(i).set(j, 0);
             }
         }
-        // Randomly remove 10% of walls.
         for (int i = 1; i < MAZE_HEIGHT - 1; i++) {
             for (int j = 1; j < MAZE_WIDTH - 1; j++) {
-                if (Math.random() < 0.1) {
+                if (Math.random() < 0.1) { // randomly remove 10% of walls
                     maze.get(i).set(j, 0);
                 }
             }
         }
-        // Designate moving walls.
         Random rand = new Random();
         int movingWallsIndex = 0;
         while (movingWallsIndex < 4) {
-            int i = rand.nextInt(MAZE_HEIGHT - 2) + 1;
-            int j = rand.nextInt(MAZE_WIDTH - 2) + 1;
+            int i = rand.nextInt(18) + 1;
+            int j = rand.nextInt(18) + 1;
             boolean found = false;
             if (maze.get(i).get(j) == 1) {
                 for (int n = 0; n < movingWallsIndex; n++) {
                     if (movingWalls[n][0] == i && movingWalls[n][1] == j) {
                         found = true;
-                        break;
                     }
                 }
                 if (!found) {
@@ -81,11 +77,11 @@ public class BasicServer {
         for (int i = 0; i < npcCount; i++) {
             if (validPositions.isEmpty())
                 break;
-            NPC npc = NPC.generateRandomNPC(validPositions, npcAppearance, 0.01);
+            NPC npc = NPC.generateRandomNPC(validPositions, npcAppearance, 0.005);
             npcs.add(npc);
         }
 
-        // Update NPC positions and broadcast them periodically.
+        // Update NPC positions and broadcast them.
         new Thread(() -> {
             while (true) {
                 for (NPC npc : npcs) {
@@ -98,9 +94,7 @@ public class BasicServer {
                 broadcastNPCPositions();
                 try {
                     Thread.sleep(50);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+                } catch (InterruptedException e) { e.printStackTrace(); }
             }
         }).start();
 
@@ -154,8 +148,6 @@ public class BasicServer {
                 in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 // Send the player's ID.
                 out.println("ID " + playerId);
-
-                // Send maze data as a single string (each row concatenated).
                 StringBuilder mazeStr = new StringBuilder();
                 for (ArrayList<Integer> row : maze) {
                     for (Integer cell : row) {
@@ -163,12 +155,10 @@ public class BasicServer {
                     }
                 }
                 out.println(mazeStr.toString());
-
                 // Send moving wall coordinates.
                 for (int[] coords : movingWalls) {
                     out.println(coords[0] + " " + coords[1]);
                 }
-
                 // Send NPC initialization info.
                 out.println("NPC_COUNT " + npcs.size());
                 for (NPC npc : npcs) {
@@ -191,7 +181,6 @@ public class BasicServer {
             try {
                 while ((inputLine = in.readLine()) != null) {
                     System.out.println("Received from player " + playerId + ": " + inputLine);
-                    // Broadcast any update from one client to all clients.
                     broadcast(inputLine, this);
                 }
             } catch (IOException e) {
