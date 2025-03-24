@@ -99,6 +99,9 @@ public class BasicScene extends JPanel {
             }
 
             // Read moving wall coordinates (expect 4 lines).
+            long offset = System.currentTimeMillis() % 19000;
+            Alpha a = new Alpha(-1, Alpha.INCREASING_ENABLE | Alpha.DECREASING_ENABLE,
+                    0, 19000 - offset, 2000, 0, 5000, 2000, 0, 10000);
             for (int i = 0; i < 4; i++) {
                 String coords = in.readLine();
                 if (coords != null) {
@@ -106,9 +109,6 @@ public class BasicScene extends JPanel {
                     Point p = new Point(Integer.parseInt(coordsSplit[0]), Integer.parseInt(coordsSplit[1]));
                     movingWalls.add(p);
                     // Set the alpha with a synchronized offset.
-                    long offset = System.currentTimeMillis() % 19000;
-                    Alpha a = new Alpha(-1, Alpha.INCREASING_ENABLE | Alpha.DECREASING_ENABLE,
-                            0, 19000 - offset, 2000, 0, 5000, 2000, 0, 10000);
                     movingWallAlphas.put(p, a);
                 }
             }
