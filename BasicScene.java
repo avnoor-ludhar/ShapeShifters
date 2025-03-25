@@ -37,7 +37,7 @@ public class BasicScene extends JPanel {
     // Movement step (reduced from 0.025 to 0.010 for slower movement)
     private final double STEP = 0.010;
 
-    // Maze collision data: each wall’s bounding rectangle (and its grid coordinates)
+    // Maze collision data: each wall's bounding rectangle (and its grid coordinates)
     private HashMap<Rectangle2D.Double, Point> wallBounds = new HashMap<>();
 
     // Maze dimensions and layout (maze is provided by the server)
@@ -203,10 +203,18 @@ public class BasicScene extends JPanel {
                     double x = Double.parseDouble(tokens[1]);
                     double y = Double.parseDouble(tokens[2]);
                     double z = Double.parseDouble(tokens[3]);
+                    
+                    // Handle direction if it's included in the message
+                    int direction = GhostModel.DIRECTION_DOWN; // Default
+                    if (tokens.length >= 5) {
+                        direction = Integer.parseInt(tokens[4]);
+                    }
+                    
+                    // Update ghost models with position and rotation
                     if (id == 1 && redGhost != null) {
-                        redGhost.updatePosition(x, z);
+                        redGhost.updatePositionAndRotation(x, z, direction);
                     } else if (id == 2 && blueGhost != null) {
-                        blueGhost.updatePosition(x, z);
+                        blueGhost.updatePositionAndRotation(x, z, direction);
                     }
                 }
             } catch (IOException e) {
@@ -446,25 +454,47 @@ public class BasicScene extends JPanel {
             newX = blueBoxPos.x;
             newZ = blueBoxPos.z;
         }
+        
         double dx = 0, dz = 0;
+        int direction = -1; // Track which direction we're moving
+        
         if (upPressed) {
             dz -= STEP;
+            direction = GhostModel.DIRECTION_UP;
         }
         if (downPressed) {
             dz += STEP;
+            direction = GhostModel.DIRECTION_DOWN;
         }
         if (leftPressed) {
             dx -= STEP;
+            direction = GhostModel.DIRECTION_LEFT;
         }
         if (rightPressed) {
             dx += STEP;
+            direction = GhostModel.DIRECTION_RIGHT;
         }
+        
         // Normalize diagonal movement to keep speed consistent.
         if (dx != 0 || dz != 0) {
             double length = Math.sqrt(dx * dx + dz * dz);
             dx = dx / length * STEP;
             dz = dz / length * STEP;
+            
+            // For diagonal movement, prioritize the last key pressed
+            // If multiple keys are pressed simultaneously, we'll use the horizontal direction
+            if (dx != 0 && dz != 0) {
+                if (Math.abs(dx) >= Math.abs(dz)) {
+                    direction = (dx < 0) ? GhostModel.DIRECTION_LEFT : GhostModel.DIRECTION_RIGHT;
+                } else {
+                    direction = (dz < 0) ? GhostModel.DIRECTION_UP : GhostModel.DIRECTION_DOWN;
+                }
+            }
+        } else {
+            // If no keys are pressed, return without updating
+            return;
         }
+        
         newX += dx;
         newZ += dz;
 
@@ -472,15 +502,20 @@ public class BasicScene extends JPanel {
             if (playerId == 1) {
                 redBoxPos.x = newX;
                 redBoxPos.z = newZ;
-                redGhost.updatePosition(newX, newZ);
+                // Use updatePositionAndRotation instead of just updatePosition
+                redGhost.updatePositionAndRotation(newX, newZ, direction);
             } else {
                 blueBoxPos.x = newX;
                 blueBoxPos.z = newZ;
-                blueGhost.updatePosition(newX, newZ);
+                // Use updatePositionAndRotation instead of just updatePosition
+                blueGhost.updatePositionAndRotation(newX, newZ, direction);
             }
+            
             if (out != null) {
-                out.println(playerId + " " + newX + " " + 0.1 + " " + newZ);
+                // Send rotation information to the server
+                out.println(playerId + " " + newX + " " + 0.1 + " " + newZ + " " + direction);
             }
+            
             updateCamera();
             updateSpotlight();
             if ((dx != 0 || dz != 0) && (System.currentTimeMillis() - lastFootstepTime > FOOTSTEP_COOLDOWN)) {
