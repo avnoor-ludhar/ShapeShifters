@@ -132,15 +132,15 @@ public class BasicScene extends JPanel {
             }
 
             // Read moving wall coordinates (expecting 4 lines).
+            long offset = System.currentTimeMillis() % 19000;
+            Alpha a = new Alpha(-1, Alpha.INCREASING_ENABLE | Alpha.DECREASING_ENABLE,
+                    0, 19000 - offset, 2000, 0, 5000, 2000, 0, 10000);
             for (int i = 0; i < 4; i++) {
                 String coords = in.readLine();
                 if (coords != null) {
                     String[] split = coords.split(" ");
                     Point p = new Point(Integer.parseInt(split[0]), Integer.parseInt(split[1]));
                     movingWalls.add(p);
-                    long offset = System.currentTimeMillis() % 19000;
-                    Alpha a = new Alpha(-1, Alpha.INCREASING_ENABLE | Alpha.DECREASING_ENABLE,
-                            0, 19000 - offset, 2000, 0, 5000, 2000, 0, 10000);
                     movingWallAlphas.put(p, a);
                 }
             }
@@ -245,7 +245,7 @@ public class BasicScene extends JPanel {
                 new Color3f(0.8f, 0.8f, 0.8f),
                 new Color3f(1.0f, 1.0f, 1.0f),
                 64.0f));
-        String floorTexturePath = "src/ShapeShifters/Textures/QuartzFloorTexture.jpg";
+        String floorTexturePath = "./Textures/QuartzFloorTexture.jpg";
         try {
             URL floorTextureURL = new File(floorTexturePath).toURI().toURL();
             Texture floorTexture = new TextureLoader(floorTextureURL, "RGB", new java.awt.Container()).getTexture();
@@ -272,7 +272,7 @@ public class BasicScene extends JPanel {
         // Create maze walls.
         Appearance wallAppearance = new Appearance();
         // Load wall texture.
-        String wallTexturePath = "src/ShapeShifters/Textures/WhiteWallTexture.jpg";
+        String wallTexturePath = "./Textures/WhiteWallTexture.jpg";
         try {
             URL wallTextureURL = new File(wallTexturePath).toURI().toURL();
             Texture wallTexture = new TextureLoader(wallTextureURL, "RGB", new java.awt.Container()).getTexture();
@@ -484,10 +484,14 @@ public class BasicScene extends JPanel {
             // For diagonal movement, prioritize the last key pressed
             // If multiple keys are pressed simultaneously, we'll use the horizontal direction
             if (dx != 0 && dz != 0) {
-                if (Math.abs(dx) >= Math.abs(dz)) {
-                    direction = (dx < 0) ? GhostModel.DIRECTION_LEFT : GhostModel.DIRECTION_RIGHT;
+                if (dx < 0 && dz > 0) {
+                    direction = GhostModel.DIRECTION_DOWNLEFT;
+                } else if (dx < 0 && dz < 0) {
+                    direction = GhostModel.DIRECTION_UPLEFT;
+                } else if (dx > 0 && dz > 0) {
+                    direction = GhostModel.DIRECTION_DOWNRIGHT;
                 } else {
-                    direction = (dz < 0) ? GhostModel.DIRECTION_UP : GhostModel.DIRECTION_DOWN;
+                    direction = GhostModel.DIRECTION_UPRIGHT;
                 }
             }
         } else {
@@ -575,7 +579,7 @@ public class BasicScene extends JPanel {
     // Play footstep sound effect.
     private void playFootstepSound() {
         try {
-            File soundFile = new File("src/ShapeShifters/sounds/footsteps.wav");
+            File soundFile = new File("./sounds/footsteps.wav");
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
             javax.sound.sampled.Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
@@ -588,7 +592,7 @@ public class BasicScene extends JPanel {
     // Play wall collision sound effect.
     private void playWallCollisionSound() {
         try {
-            File soundFile = new File("src/ShapeShifters/sounds/wallCollide.wav");
+            File soundFile = new File("./sounds/wallCollide.wav");
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
             javax.sound.sampled.Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
