@@ -189,7 +189,7 @@ public class BasicScene extends JPanel {
                 double tx = Double.parseDouble(parts[1]);
                 double ty = Double.parseDouble(parts[2]);
                 double tz = Double.parseDouble(parts[3]);
-                treasureGroup = createTreasure(tx, 0.4, tz);
+                treasureGroup = createTreasure(tx, ty, tz);
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -659,7 +659,7 @@ public class BasicScene extends JPanel {
     // Play footstep sound effect.
     private void playFootstepSound() {
         try {
-            File soundFile = new File("./sounds/footsteps.wav");
+            File soundFile = new File("src/ShapeShifters/sounds/footsteps.wav");
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
             javax.sound.sampled.Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
@@ -672,7 +672,7 @@ public class BasicScene extends JPanel {
     // Play wall collision sound effect.
     private void playWallCollisionSound() {
         try {
-            File soundFile = new File("./sounds/wallCollide.wav");
+            File soundFile = new File("src/ShapeShifters/sounds/wallCollide.wav");
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
             javax.sound.sampled.Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
@@ -775,7 +775,7 @@ public class BasicScene extends JPanel {
         }
 
         // Create a sphere to represent the treasure
-        Sphere treasureSphere = new Sphere(0.1f, Primitive.GENERATE_NORMALS, treasureAppearance);
+        Sphere treasureSphere = new Sphere(0.03f, Primitive.GENERATE_NORMALS, treasureAppearance);
 
         treasureSphere.setPickable(true);
 
