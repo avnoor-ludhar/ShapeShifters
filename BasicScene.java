@@ -41,7 +41,7 @@ public class BasicScene extends JPanel {
     // Movement step (reduced from 0.025 to 0.010 for slower movement)
     private final double STEP = 0.010;
 
-    // Maze collision data: each wall’s bounding rectangle (and its grid coordinates)
+    // Maze collision data: each wall's bounding rectangle (and its grid coordinates)
     private HashMap<Rectangle2D.Double, Point> wallBounds = new HashMap<>();
 
     // Maze dimensions and layout (maze is provided by the server)
@@ -143,15 +143,15 @@ public class BasicScene extends JPanel {
             }
 
             // Read moving wall coordinates (expecting 4 lines).
+            long offset = System.currentTimeMillis() % 19000;
+            Alpha a = new Alpha(-1, Alpha.INCREASING_ENABLE | Alpha.DECREASING_ENABLE,
+                    0, 19000 - offset, 2000, 0, 5000, 2000, 0, 10000);
             for (int i = 0; i < 4; i++) {
                 String coords = in.readLine();
                 if (coords != null) {
                     String[] split = coords.split(" ");
                     Point p = new Point(Integer.parseInt(split[0]), Integer.parseInt(split[1]));
                     movingWalls.add(p);
-                    long offset = System.currentTimeMillis() % 19000;
-                    Alpha a = new Alpha(-1, Alpha.INCREASING_ENABLE | Alpha.DECREASING_ENABLE,
-                            0, 19000 - offset, 2000, 0, 5000, 2000, 0, 10000);
                     movingWallAlphas.put(p, a);
                 }
             }
@@ -223,10 +223,18 @@ public class BasicScene extends JPanel {
                     double x = Double.parseDouble(tokens[1]);
                     double y = Double.parseDouble(tokens[2]);
                     double z = Double.parseDouble(tokens[3]);
+                    
+                    // Handle direction if it's included in the message
+                    int direction = GhostModel.DIRECTION_DOWN; // Default
+                    if (tokens.length >= 5) {
+                        direction = Integer.parseInt(tokens[4]);
+                    }
+                    
+                    // Update ghost models with position and rotation
                     if (id == 1 && redGhost != null) {
-                        redGhost.updatePosition(x, z);
+                        redGhost.updatePositionAndRotation(x, z, direction);
                     } else if (id == 2 && blueGhost != null) {
-                        blueGhost.updatePosition(x, z);
+                        blueGhost.updatePositionAndRotation(x, z, direction);
                     }
                 }
             } catch (IOException e) {
@@ -257,7 +265,7 @@ public class BasicScene extends JPanel {
                 new Color3f(0.8f, 0.8f, 0.8f),
                 new Color3f(1.0f, 1.0f, 1.0f),
                 64.0f));
-        String floorTexturePath = "src/ShapeShifters/Textures/QuartzFloorTexture.jpg";
+        String floorTexturePath = "./Textures/QuartzFloorTexture.jpg";
         try {
             URL floorTextureURL = new File(floorTexturePath).toURI().toURL();
             Texture floorTexture = new TextureLoader(floorTextureURL, "RGB", new java.awt.Container()).getTexture();
@@ -284,7 +292,7 @@ public class BasicScene extends JPanel {
         // Create maze walls.
         Appearance wallAppearance = new Appearance();
         // Load wall texture.
-        String wallTexturePath = "src/ShapeShifters/Textures/WhiteWallTexture.jpg";
+        String wallTexturePath = "./Textures/WhiteWallTexture.jpg";
         try {
             URL wallTextureURL = new File(wallTexturePath).toURI().toURL();
             Texture wallTexture = new TextureLoader(wallTextureURL, "RGB", new java.awt.Container()).getTexture();
@@ -526,25 +534,51 @@ public class BasicScene extends JPanel {
             newX = blueBoxPos.x;
             newZ = blueBoxPos.z;
         }
+        
         double dx = 0, dz = 0;
+        int direction = -1; // Track which direction we're moving
+        
         if (upPressed) {
             dz -= STEP;
+            direction = GhostModel.DIRECTION_UP;
         }
         if (downPressed) {
             dz += STEP;
+            direction = GhostModel.DIRECTION_DOWN;
         }
         if (leftPressed) {
             dx -= STEP;
+            direction = GhostModel.DIRECTION_LEFT;
         }
         if (rightPressed) {
             dx += STEP;
+            direction = GhostModel.DIRECTION_RIGHT;
         }
+        
         // Normalize diagonal movement to keep speed consistent.
         if (dx != 0 || dz != 0) {
             double length = Math.sqrt(dx * dx + dz * dz);
             dx = dx / length * STEP;
             dz = dz / length * STEP;
+            
+            // For diagonal movement, prioritize the last key pressed
+            // If multiple keys are pressed simultaneously, we'll use the horizontal direction
+            if (dx != 0 && dz != 0) {
+                if (dx < 0 && dz > 0) {
+                    direction = GhostModel.DIRECTION_DOWNLEFT;
+                } else if (dx < 0 && dz < 0) {
+                    direction = GhostModel.DIRECTION_UPLEFT;
+                } else if (dx > 0 && dz > 0) {
+                    direction = GhostModel.DIRECTION_DOWNRIGHT;
+                } else {
+                    direction = GhostModel.DIRECTION_UPRIGHT;
+                }
+            }
+        } else {
+            // If no keys are pressed, return without updating
+            return;
         }
+        
         newX += dx;
         newZ += dz;
 
@@ -552,15 +586,20 @@ public class BasicScene extends JPanel {
             if (playerId == 1) {
                 redBoxPos.x = newX;
                 redBoxPos.z = newZ;
-                redGhost.updatePosition(newX, newZ);
+                // Use updatePositionAndRotation instead of just updatePosition
+                redGhost.updatePositionAndRotation(newX, newZ, direction);
             } else {
                 blueBoxPos.x = newX;
                 blueBoxPos.z = newZ;
-                blueGhost.updatePosition(newX, newZ);
+                // Use updatePositionAndRotation instead of just updatePosition
+                blueGhost.updatePositionAndRotation(newX, newZ, direction);
             }
+            
             if (out != null) {
-                out.println(playerId + " " + newX + " " + 0.1 + " " + newZ);
+                // Send rotation information to the server
+                out.println(playerId + " " + newX + " " + 0.1 + " " + newZ + " " + direction);
             }
+            
             updateCamera();
             updateSpotlight();
             if ((dx != 0 || dz != 0) && (System.currentTimeMillis() - lastFootstepTime > FOOTSTEP_COOLDOWN)) {
@@ -620,7 +659,7 @@ public class BasicScene extends JPanel {
     // Play footstep sound effect.
     private void playFootstepSound() {
         try {
-            File soundFile = new File("src/ShapeShifters/sounds/footsteps.wav");
+            File soundFile = new File("./sounds/footsteps.wav");
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
             javax.sound.sampled.Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
@@ -633,7 +672,7 @@ public class BasicScene extends JPanel {
     // Play wall collision sound effect.
     private void playWallCollisionSound() {
         try {
-            File soundFile = new File("src/ShapeShifters/sounds/wallCollide.wav");
+            File soundFile = new File("./sounds/wallCollide.wav");
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
             javax.sound.sampled.Clip clip = AudioSystem.getClip();
             clip.open(audioIn);

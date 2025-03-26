@@ -12,17 +12,27 @@ import org.jogamp.vecmath.*;
 public class GhostModel {
     // Model constants
     private static final double MODEL_SCALE = 0.05;
-//    private static final String MODEL_PATH = "src/ShapeShifters/assets/ghost.obj";
-    private static final String MODEL_PATH = "src/ShapeShifters/assets/ghost.obj";
+    private static final String MODEL_PATH = "./assets/ghost.obj";
 
     // Character collision constants
     private static final double CHARACTER_HALF = 0.02;
     
+    // Direction constants
+    public static final int DIRECTION_DOWN = 0;  // S key - default
+    public static final int DIRECTION_LEFT = 1;  // A key
+    public static final int DIRECTION_UP = 2;    // W key
+    public static final int DIRECTION_RIGHT = 3; // D key
+    public static final int DIRECTION_UPRIGHT = 4;
+    public static final int DIRECTION_DOWNRIGHT = 5;
+    public static final int DIRECTION_DOWNLEFT = 6;
+    public static final int DIRECTION_UPLEFT = 7;
     // Model information
     private TransformGroup modelRootTG;
+    private TransformGroup rotationTG; // For rotation
     private Vector3d position;
     private Color3f modelColor;
     private boolean isRedPlayer;
+    private int currentDirection = DIRECTION_DOWN; // Default facing down (S key)
     
     /**
      * Creates a new ghost model.
@@ -39,14 +49,68 @@ public class GhostModel {
                 new Color3f(1.0f, 0.2f, 0.2f) :  // Red for player 1
                 new Color3f(0.2f, 0.2f, 1.0f);   // Blue for player 2
                 
-        // Create the transform group
+        // Create the transform group for position
         Transform3D initialTransform = new Transform3D();
         initialTransform.setTranslation(position);
         modelRootTG = new TransformGroup(initialTransform);
         modelRootTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
         
+        // Create rotation transform group
+        rotationTG = new TransformGroup();
+        rotationTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
+        modelRootTG.addChild(rotationTG);
+        
         // Load the model
         loadModel();
+        
+        // Set initial rotation (default facing down - s key)
+        updateRotation(DIRECTION_DOWN);
+    }
+    
+    /**
+     * Updates the ghost's direction and rotation based on movement key.
+     * 
+     * @param direction The direction constant (DIRECTION_UP, DIRECTION_DOWN, etc.)
+     */
+    public void updateRotation(int direction) {
+        currentDirection = direction;
+        
+        Transform3D rotationTransform = new Transform3D();
+        
+        // Apply rotation based on direction
+        switch (direction) {
+            case DIRECTION_LEFT:  // A key - 90 degrees left from down
+                rotationTransform.rotY(-Math.PI / 2);
+                break;
+                
+            case DIRECTION_UP:    // W key - 180 degrees from down
+                rotationTransform.rotY(Math.PI);
+                break;
+                
+            case DIRECTION_RIGHT: // D key - 90 degrees right from down
+                rotationTransform.rotY(Math.PI / 2);
+                break;
+                
+            case DIRECTION_DOWN:  // S key - default position
+                break;
+            case DIRECTION_DOWNLEFT:
+                rotationTransform.rotY(-Math.PI/4);
+                break;
+            case DIRECTION_UPLEFT:
+                rotationTransform.rotY(-3*Math.PI/4);
+                break;
+            case DIRECTION_UPRIGHT:
+                rotationTransform.rotY(3*Math.PI/4);
+                break;
+            case DIRECTION_DOWNRIGHT:
+                rotationTransform.rotY(Math.PI/4);
+                break;
+            default:
+                // No rotation needed for down direction
+                break;
+        }
+        
+        rotationTG.setTransform(rotationTransform);
     }
     
     /**
@@ -82,8 +146,8 @@ public class GhostModel {
             TransformGroup modelScaleTG = new TransformGroup(modelScale);
             modelScaleTG.addChild(modelBG);
 
-            // Add the model (scaled) to the parent TransformGroup
-            modelRootTG.addChild(modelScaleTG);
+            // Add the model (scaled) to the rotation transform group
+            rotationTG.addChild(modelScaleTG);
 
         } catch (Exception e) {
             System.err.println("Error loading model (" + MODEL_PATH + "): " + e.getMessage());
@@ -113,6 +177,22 @@ public class GhostModel {
         modelRootTG.setTransform(newTransform);
     }
     
+    /**
+     * Update both position and rotation based on movement
+     */
+    public void updatePositionAndRotation(double newX, double newZ, int direction) {
+        // Update position
+        position.x = newX;
+        position.z = newZ;
+        
+        Transform3D newTransform = new Transform3D();
+        newTransform.setTranslation(position);
+        modelRootTG.setTransform(newTransform);
+        
+        // Update rotation
+        updateRotation(direction);
+    }
+    
     public TransformGroup getTransformGroup() {
         return modelRootTG;
     }
@@ -127,5 +207,9 @@ public class GhostModel {
 
     public boolean isRedPlayer() {
         return isRedPlayer;
+    }
+    
+    public int getCurrentDirection() {
+        return currentDirection;
     }
 }
