@@ -265,7 +265,7 @@ public class BasicScene extends JPanel {
                 new Color3f(0.8f, 0.8f, 0.8f),
                 new Color3f(1.0f, 1.0f, 1.0f),
                 64.0f));
-        String floorTexturePath = "./Textures/QuartzFloorTexture.jpg";
+        String floorTexturePath = "src/ShapeShifters/Textures/QuartzFloorTexture.jpg";
         try {
             URL floorTextureURL = new File(floorTexturePath).toURI().toURL();
             Texture floorTexture = new TextureLoader(floorTextureURL, "RGB", new java.awt.Container()).getTexture();
@@ -292,7 +292,7 @@ public class BasicScene extends JPanel {
         // Create maze walls.
         Appearance wallAppearance = new Appearance();
         // Load wall texture.
-        String wallTexturePath = "./Textures/WhiteWallTexture.jpg";
+        String wallTexturePath = "src/ShapeShifters/Textures/WhiteWallTexture.jpg";
         try {
             URL wallTextureURL = new File(wallTexturePath).toURI().toURL();
             Texture wallTexture = new TextureLoader(wallTextureURL, "RGB", new java.awt.Container()).getTexture();

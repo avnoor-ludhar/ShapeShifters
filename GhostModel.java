@@ -12,7 +12,7 @@ import org.jogamp.vecmath.*;
 public class GhostModel {
     // Model constants
     private static final double MODEL_SCALE = 0.05;
-    private static final String MODEL_PATH = "./assets/ghost.obj";
+    private static final String MODEL_PATH = "src/ShapeShifter/assets/ghost.obj";
 
     // Character collision constants
     private static final double CHARACTER_HALF = 0.02;
