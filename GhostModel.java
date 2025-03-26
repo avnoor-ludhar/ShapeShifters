@@ -12,7 +12,7 @@ import org.jogamp.vecmath.*;
 public class GhostModel {
     // Model constants
     private static final double MODEL_SCALE = 0.05;
-    private static final String MODEL_PATH = "src/ShapeShifters/assets/ghost.obj";
+    private static final String MODEL_PATH = "./assets/ghost.obj";
 
     // Character collision constants
     private static final double CHARACTER_HALF = 0.02;
@@ -22,7 +22,10 @@ public class GhostModel {
     public static final int DIRECTION_LEFT = 1;  // A key
     public static final int DIRECTION_UP = 2;    // W key
     public static final int DIRECTION_RIGHT = 3; // D key
-    
+    public static final int DIRECTION_UPRIGHT = 4;
+    public static final int DIRECTION_DOWNRIGHT = 5;
+    public static final int DIRECTION_DOWNLEFT = 6;
+    public static final int DIRECTION_UPLEFT = 7;
     // Model information
     private TransformGroup modelRootTG;
     private TransformGroup rotationTG; // For rotation
@@ -89,6 +92,19 @@ public class GhostModel {
                 break;
                 
             case DIRECTION_DOWN:  // S key - default position
+                break;
+            case DIRECTION_DOWNLEFT:
+                rotationTransform.rotY(-Math.PI/4);
+                break;
+            case DIRECTION_UPLEFT:
+                rotationTransform.rotY(-3*Math.PI/4);
+                break;
+            case DIRECTION_UPRIGHT:
+                rotationTransform.rotY(3*Math.PI/4);
+                break;
+            case DIRECTION_DOWNRIGHT:
+                rotationTransform.rotY(Math.PI/4);
+                break;
             default:
                 // No rotation needed for down direction
                 break;
