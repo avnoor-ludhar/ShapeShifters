@@ -101,6 +101,7 @@ public class BasicScene extends JPanel implements MouseListener {
     private String username;
     private Canvas3D canvas;
     private BranchGroup rootBG;
+    private static PickTool pickTool = null;
 
 
 
@@ -361,6 +362,13 @@ public class BasicScene extends JPanel implements MouseListener {
         setDarkAmbientLight(sceneBG);
 
         this.rootBG = sceneBG;
+        rootBG.setCapability(BranchGroup.ALLOW_CHILDREN_EXTEND);
+        rootBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
+
+        if (pickTool == null) {
+            pickTool = new PickTool(rootBG);
+            pickTool.setMode(PickTool.BOUNDS);
+        }
 
         sceneBG.compile();
         return sceneBG;
@@ -422,6 +430,8 @@ public class BasicScene extends JPanel implements MouseListener {
         GraphicsConfiguration config = SimpleUniverse.getPreferredConfiguration();
         canvas = new Canvas3D(config);
 
+        canvas.addMouseListener(this);
+
         // Set up key listener to update movement state.
         canvas.addKeyListener(new KeyAdapter() {
             @Override
@@ -466,63 +476,6 @@ public class BasicScene extends JPanel implements MouseListener {
         universe.addBranchGraph(sceneBG);
         setLayout(new BorderLayout());
         add("Center", canvas);
-    }
-
-    @Override
-    public void mouseClicked(MouseEvent e) {
-        // Get the x and y coordinates where the mouse was clicked
-        int x = e.getX();
-        int y = e.getY();
-        Point3d point3d = new Point3d(), center = new Point3d();
-
-        // Convert the clicked pixel coordinates to image plate coordinates
-        canvas.getPixelLocationInImagePlate(x, y, point3d);
-        // Get the current eye (camera) position in the same coordinate system
-        canvas.getCenterEyeInImagePlate(center);
-
-        // Prepare a transformation to convert image plate coordinates into world coordinates
-        Transform3D transform3D = new Transform3D();
-        canvas.getImagePlateToVworld(transform3D);
-        // Apply the transformation to both the click point and the camera position
-        transform3D.transform(point3d);
-        transform3D.transform(center);
-
-        // Calculate the direction vector from the camera to the click point
-        Vector3d mouseVec = new Vector3d();
-        mouseVec.sub(point3d, center);
-        mouseVec.normalize();
-
-        // Use the computed point and direction to set up a picking ray.
-        // IMPORTANT: Initialize your PickTool with the overall scene root (not just the cube)
-        pickTool.setShapeRay(point3d, mouseVec);
-
-        // Check if any object was picked
-        PickResult pr = pickTool.pickClosest();
-        if (pr != null) {
-            Node pickedNode = pr.getNode(PickResult.SHAPE3D);
-            if (pickedNode != null) {
-                // Traverse up the parent chain to see if this node (or one of its parents) is the treasure
-                Node current = pickedNode;
-                boolean found = false;
-                while (current != null) {
-                    Object userData = current.getUserData();
-                    if (userData != null && "treasure".equals(userData.toString())) {
-                        System.out.println("Treasure clicked!");
-                        found = true;
-                        // Insert any winning logic here
-                        break;
-                    }
-                    current = current.getParent();
-                }
-                if (!found) {
-                    System.out.println("Picked shape is not treasure.");
-                }
-            } else {
-                System.out.println("No Shape3D picked.");
-            }
-        } else {
-            System.out.println("No pick result.");
-        }
     }
 
 
@@ -777,7 +730,7 @@ public class BasicScene extends JPanel implements MouseListener {
         }
 
         // Create a sphere to represent the treasure
-        Sphere treasureSphere = new Sphere(0.03f, Primitive.GENERATE_NORMALS, treasureAppearance);
+        Sphere treasureSphere = new Sphere(0.1f, Primitive.GENERATE_NORMALS, treasureAppearance);
 
         treasureSphere.setPickable(true);
 
@@ -805,6 +758,65 @@ public class BasicScene extends JPanel implements MouseListener {
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setVisible(true);
     }
+
+    @Override
+    public void mouseClicked(MouseEvent e) {
+        // Get the x and y coordinates where the mouse was clicked
+        System.out.println("boom");
+        int x = e.getX();
+        int y = e.getY();
+        Point3d point3d = new Point3d(), center = new Point3d();
+
+        // Convert the clicked pixel coordinates to image plate coordinates
+        canvas.getPixelLocationInImagePlate(x, y, point3d);
+        // Get the current eye (camera) position in the same coordinate system
+        canvas.getCenterEyeInImagePlate(center);
+
+        // Prepare a transformation to convert image plate coordinates into world coordinates
+        Transform3D transform3D = new Transform3D();
+        canvas.getImagePlateToVworld(transform3D);
+        // Apply the transformation to both the click point and the camera position
+        transform3D.transform(point3d);
+        transform3D.transform(center);
+
+        // Calculate the direction vector from the camera to the click point
+        Vector3d mouseVec = new Vector3d();
+        mouseVec.sub(point3d, center);
+        mouseVec.normalize();
+
+        // Use the computed point and direction to set up a picking ray.
+        // IMPORTANT: Initialize your PickTool with the overall scene root (not just the cube)
+        pickTool.setShapeRay(point3d, mouseVec);
+
+        // Check if any object was picked
+        PickResult pr = pickTool.pickClosest();
+        if (pr != null) {
+            Node pickedNode = pr.getNode(PickResult.SHAPE3D);
+            if (pickedNode != null) {
+                // Traverse up the parent chain to see if this node (or one of its parents) is the treasure
+                Node current = pickedNode;
+                boolean found = false;
+                while (current != null) {
+                    Object userData = current.getUserData();
+                    if (userData != null && "treasure".equals(userData.toString())) {
+                        System.out.println("Treasure clicked!");
+                        found = true;
+                        // Insert any winning logic here
+                        break;
+                    }
+                    current = current.getParent();
+                }
+                if (!found) {
+                    System.out.println("Picked shape is not treasure.");
+                }
+            } else {
+                System.out.println("No Shape3D picked.");
+            }
+        } else {
+            System.out.println("No pick result.");
+        }
+    }
+
 
     @Override
     public void mousePressed(MouseEvent e) { }
