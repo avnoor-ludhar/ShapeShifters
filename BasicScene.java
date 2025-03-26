@@ -227,8 +227,8 @@ public class BasicScene extends JPanel {
     public BranchGroup createScene() {
         BranchGroup sceneBG = new BranchGroup();
 
-        // Set background color to black.
-        Background background = new Background(new Color3f(0.0f, 0.0f, 0.0f));
+        // Set background to almost pure black
+        Background background = new Background(new Color3f(0.01f, 0.01f, 0.01f));
         BoundingSphere bounds = new BoundingSphere(new Point3d(0, 0, 0), 100.0);
         background.setApplicationBounds(bounds);
         sceneBG.addChild(background);
@@ -238,14 +238,14 @@ public class BasicScene extends JPanel {
 
         // Create platform with textured floor.
         Appearance platformAppearance = new Appearance();
-        // You can adjust the platform material for a darker look if desired.
         platformAppearance.setMaterial(new Material(
-                new Color3f(0.0f, 0.0f, 0.0f),
-                new Color3f(0.2f, 0.2f, 0.2f),
-                new Color3f(0.8f, 0.8f, 0.8f),
-                new Color3f(1.0f, 1.0f, 1.0f),
-                64.0f));
-        String floorTexturePath = "./Textures/QuartzFloorTexture.jpg";
+                new Color3f(0.8f, 0.8f, 0.8f),  // Increased ambient reflection
+                new Color3f(0.2f, 0.2f, 0.2f),  // Dark emission
+                new Color3f(1.0f, 1.0f, 1.0f),  // Diffuse color
+                new Color3f(1.0f, 1.0f, 1.0f),  // Specular color
+                64.0f));  // Shininess
+
+        String floorTexturePath = "src/ShapeShifters/Textures/QuartzFloorTexture.jpg";
         try {
             URL floorTextureURL = new File(floorTexturePath).toURI().toURL();
             Texture floorTexture = new TextureLoader(floorTextureURL, "RGB", new java.awt.Container()).getTexture();
@@ -272,7 +272,7 @@ public class BasicScene extends JPanel {
         // Create maze walls.
         Appearance wallAppearance = new Appearance();
         // Load wall texture.
-        String wallTexturePath = "./Textures/WhiteWallTexture.jpg";
+        String wallTexturePath = "src/ShapeShifters/Textures/WhiteWallTexture.jpg";
         try {
             URL wallTextureURL = new File(wallTexturePath).toURI().toURL();
             Texture wallTexture = new TextureLoader(wallTextureURL, "RGB", new java.awt.Container()).getTexture();
@@ -289,12 +289,14 @@ public class BasicScene extends JPanel {
         wallMat.setDiffuseColor(new Color3f(1.0f, 1.0f, 1.0f));
         wallAppearance.setMaterial(wallMat);
 
-        // Add ambient and directional lighting.
-        AmbientLight ambientLight = new AmbientLight(new Color3f(1.0f, 1.0f, 1.0f));
+        // Extremely dim ambient light
+        AmbientLight ambientLight = new AmbientLight(new Color3f(0.05f, 0.05f, 0.05f));
         ambientLight.setInfluencingBounds(bounds);
         sceneBG.addChild(ambientLight);
+
+        // Extremely dim directional light
         DirectionalLight directionalLight = new DirectionalLight(
-                new Color3f(1.0f, 1.0f, 1.0f),
+                new Color3f(0.0f, 0.0f, 0.0f),
                 new Vector3f(-1.0f, -1.0f, -1.0f));
         directionalLight.setInfluencingBounds(bounds);
         sceneBG.addChild(directionalLight);
@@ -336,8 +338,6 @@ public class BasicScene extends JPanel {
 
         // Create a spotlight that follows the player.
         createSpotlight(sceneBG);
-        // Add dark ambient light.
-        setDarkAmbientLight(sceneBG);
 
         sceneBG.compile();
         return sceneBG;
@@ -369,30 +369,30 @@ public class BasicScene extends JPanel {
     private void createSpotlight(BranchGroup sceneBG) {
         spotlightTG = new TransformGroup();
         spotlightTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
-        Point3f initialPosition = new Point3f(0.0f, 0.3f, 0.0f);
+
+        Point3f initialPosition = new Point3f(0.0f, 0.2f, 0.0f);  // Slightly higher
         Vector3f initialDirection = new Vector3f(0.0f, -1.0f, 0.0f);
-        Color3f lightColor = new Color3f(1.0f, 1.0f, 1.0f);
-        spotlight = new SpotLight(lightColor, initialPosition, new Point3f(1.0f, 0.5f, 0.1f),
-                initialDirection, SPOTLIGHT_SPREAD_ANGLE, SPOTLIGHT_CONCENTRATION);
+        Color3f lightColor = new Color3f(1.0f, 0.95f, 0.6f);  // Slightly warmer, brighter white
+
+        spotlight = new SpotLight(lightColor, initialPosition, new Point3f(1.0f, 0.05f, 0.01f),
+                initialDirection,
+                (float) Math.PI / 2,  // Wider spread to cover more area
+                50.0f);  // Higher concentration for more focused light
+
         spotlight.setCapability(Light.ALLOW_STATE_WRITE);
         Transform3D lightTransform = new Transform3D();
         lightTransform.setTranslation(new Vector3d(initialPosition));
         TransformGroup spotlightTransformGroup = new TransformGroup(lightTransform);
         spotlightTransformGroup.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
         spotlightTransformGroup.addChild(spotlight);
+
         lightBounds = new BoundingSphere(new Point3d(0, 0, 0), 100.0);
         spotlight.setInfluencingBounds(lightBounds);
         sceneBG.addChild(spotlightTransformGroup);
         spotlightTG = spotlightTransformGroup;
     }
 
-    // Set ambient light to complete darkness.
-    private void setDarkAmbientLight(BranchGroup sceneBG) {
-        Color3f ambientColor = new Color3f(0.0f, 0.0f, 0.0f);
-        AmbientLight ambientLight = new AmbientLight(ambientColor);
-        ambientLight.setInfluencingBounds(lightBounds);
-        sceneBG.addChild(ambientLight);
-    }
+
 
     // Universe and input setup.
     public void setupUniverse(BranchGroup sceneBG) {
@@ -538,7 +538,7 @@ public class BasicScene extends JPanel {
     private void updateCamera() {
         Vector3d localPos = (playerId == 1) ? redBoxPos : blueBoxPos;
         // Slightly lower the vertical offset for a better view
-        Point3d eye = new Point3d(localPos.x, localPos.y + 1.2, localPos.z + 1.0);
+        Point3d eye = new Point3d(localPos.x, localPos.y + 0.6, localPos.z + 0.5);
         Point3d center = new Point3d(localPos.x, localPos.y, localPos.z);
         // Using an up vector (0,0,-1) as in your code; adjust if necessary.
         Vector3d up = new Vector3d(0, 0, -1);
@@ -553,9 +553,12 @@ public class BasicScene extends JPanel {
         // Use the same position vector as for movement.
         Vector3d localPos = (playerId == 1) ? redBoxPos : blueBoxPos;
         Transform3D spotlightTransform = new Transform3D();
-        Vector3d spotlightPos = new Vector3d(localPos.x, 0.3, localPos.z);
+        // Position spotlight directly above the player, slightly higher
+        Vector3d spotlightPos = new Vector3d(localPos.x, 0.8, localPos.z);
         spotlightTransform.setTranslation(spotlightPos);
         spotlightTG.setTransform(spotlightTransform);
+
+
     }
 
     // Collision detection using bounding rectangles.
@@ -579,7 +582,7 @@ public class BasicScene extends JPanel {
     // Play footstep sound effect.
     private void playFootstepSound() {
         try {
-            File soundFile = new File("./sounds/footsteps.wav");
+            File soundFile = new File("src/ShapeShifters/sounds/footsteps.wav");
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
             javax.sound.sampled.Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
@@ -592,7 +595,7 @@ public class BasicScene extends JPanel {
     // Play wall collision sound effect.
     private void playWallCollisionSound() {
         try {
-            File soundFile = new File("./sounds/wallCollide.wav");
+            File soundFile = new File("src/ShapeShifters/sounds/wallCollide.wav");
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
             javax.sound.sampled.Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
