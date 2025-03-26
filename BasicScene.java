@@ -3,10 +3,7 @@ package ShapeShifters;
 import java.awt.BorderLayout;
 import java.awt.GraphicsConfiguration;
 import java.awt.Point;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.event.*;
 import java.awt.geom.Rectangle2D;
 import java.io.*;
 import java.net.*;
@@ -26,7 +23,7 @@ import org.jogamp.java3d.utils.universe.SimpleUniverse;
 import org.jogamp.vecmath.*;
 import org.jogamp.java3d.utils.picking.PickTool;
 
-public class BasicScene extends JPanel {
+public class BasicScene extends JPanel implements MouseListener {
     private static final long serialVersionUID = 1L;
     private static JFrame frame;
 
@@ -451,59 +448,6 @@ public class BasicScene extends JPanel {
             }
         });
 
-        canvas.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseClicked(java.awt.event.MouseEvent e) {
-                if (treasureGroup == null || rootBG == null) return;  // No treasure or scene
-
-                int x = e.getX();
-                int y = e.getY();
-
-                Point3d clickPoint = new Point3d();
-                Point3d eyePoint = new Point3d();
-                canvas.getPixelLocationInImagePlate(x, y, clickPoint);
-                canvas.getCenterEyeInImagePlate(eyePoint);
-
-                Transform3D ipToVworld = new Transform3D();
-                canvas.getImagePlateToVworld(ipToVworld);
-                ipToVworld.transform(clickPoint);
-                ipToVworld.transform(eyePoint);
-
-                Vector3d rayDir = new Vector3d();
-                rayDir.sub(clickPoint, eyePoint);
-                rayDir.normalize();
-
-                // Use the entire scene's BranchGroup as the pick root.
-                PickTool pickTool = new PickTool(rootBG);
-                pickTool.setMode(PickTool.BOUNDS);
-                pickTool.setShapeRay(clickPoint, rayDir);
-
-                PickResult pr = pickTool.pickClosest();
-                if (pr != null) {
-                    Node pickedNode = pr.getNode(PickResult.SHAPE3D);
-                    if (pickedNode != null) {
-                        // Traverse up the parent chain.
-                        Node current = pickedNode;
-                        boolean found = false;
-                        while (current != null) {
-                            Object userData = current.getUserData();
-                            if (userData != null && "treasure".equals(userData.toString())) {
-                                System.out.println("clicked");
-                                found = true;
-                                break;
-                            }
-                            current = current.getParent();
-                        }
-                        if (!found) {
-                            System.out.println("Picked shape is not treasure.");
-                        }
-                    } else {
-                        System.out.println("No Shape3D picked.");
-                    }
-                }
-            }
-        });
-
         canvas.setFocusable(true);
         canvas.requestFocusInWindow();
 
@@ -523,6 +467,64 @@ public class BasicScene extends JPanel {
         setLayout(new BorderLayout());
         add("Center", canvas);
     }
+
+    @Override
+    public void mouseClicked(MouseEvent e) {
+        // Get the x and y coordinates where the mouse was clicked
+        int x = e.getX();
+        int y = e.getY();
+        Point3d point3d = new Point3d(), center = new Point3d();
+
+        // Convert the clicked pixel coordinates to image plate coordinates
+        canvas.getPixelLocationInImagePlate(x, y, point3d);
+        // Get the current eye (camera) position in the same coordinate system
+        canvas.getCenterEyeInImagePlate(center);
+
+        // Prepare a transformation to convert image plate coordinates into world coordinates
+        Transform3D transform3D = new Transform3D();
+        canvas.getImagePlateToVworld(transform3D);
+        // Apply the transformation to both the click point and the camera position
+        transform3D.transform(point3d);
+        transform3D.transform(center);
+
+        // Calculate the direction vector from the camera to the click point
+        Vector3d mouseVec = new Vector3d();
+        mouseVec.sub(point3d, center);
+        mouseVec.normalize();
+
+        // Use the computed point and direction to set up a picking ray.
+        // IMPORTANT: Initialize your PickTool with the overall scene root (not just the cube)
+        pickTool.setShapeRay(point3d, mouseVec);
+
+        // Check if any object was picked
+        PickResult pr = pickTool.pickClosest();
+        if (pr != null) {
+            Node pickedNode = pr.getNode(PickResult.SHAPE3D);
+            if (pickedNode != null) {
+                // Traverse up the parent chain to see if this node (or one of its parents) is the treasure
+                Node current = pickedNode;
+                boolean found = false;
+                while (current != null) {
+                    Object userData = current.getUserData();
+                    if (userData != null && "treasure".equals(userData.toString())) {
+                        System.out.println("Treasure clicked!");
+                        found = true;
+                        // Insert any winning logic here
+                        break;
+                    }
+                    current = current.getParent();
+                }
+                if (!found) {
+                    System.out.println("Picked shape is not treasure.");
+                }
+            } else {
+                System.out.println("No Shape3D picked.");
+            }
+        } else {
+            System.out.println("No pick result.");
+        }
+    }
+
 
     // Update the player's movement based on key states.
     private void updateMovement() {
@@ -803,4 +805,10 @@ public class BasicScene extends JPanel {
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setVisible(true);
     }
+
+    @Override
+    public void mousePressed(MouseEvent e) { }
+    public void mouseReleased(MouseEvent e) { }
+    public void mouseEntered(MouseEvent e) { }
+    public void mouseExited(MouseEvent e) { }
 }
