@@ -16,7 +16,7 @@ public class GhostModel {
 
     // Character collision constants
     private static final double CHARACTER_HALF = 0.02;
-    
+
     // Direction constants
     public static final int DIRECTION_DOWN = 0;  // S key - default
     public static final int DIRECTION_LEFT = 1;  // A key
@@ -33,64 +33,64 @@ public class GhostModel {
     private Color3f modelColor;
     private boolean isRedPlayer;
     private int currentDirection = DIRECTION_DOWN; // Default facing down (S key)
-    
+
     /**
      * Creates a new ghost model.
-     * 
+     *
      * @param isRedPlayer Whether this is the red player (player 1)
      * @param initialPosition Initial position for the model
      */
     public GhostModel(boolean isRedPlayer, Vector3d initialPosition) {
         this.isRedPlayer = isRedPlayer;
         this.position = new Vector3d(initialPosition);
-        
+
         // Set color based on player
-        this.modelColor = isRedPlayer ? 
+        this.modelColor = isRedPlayer ?
                 new Color3f(1.0f, 0.2f, 0.2f) :  // Red for player 1
                 new Color3f(0.2f, 0.2f, 1.0f);   // Blue for player 2
-                
+
         // Create the transform group for position
         Transform3D initialTransform = new Transform3D();
         initialTransform.setTranslation(position);
         modelRootTG = new TransformGroup(initialTransform);
         modelRootTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
-        
+
         // Create rotation transform group
         rotationTG = new TransformGroup();
         rotationTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
         modelRootTG.addChild(rotationTG);
-        
+
         // Load the model
         loadModel();
-        
+
         // Set initial rotation (default facing down - s key)
         updateRotation(DIRECTION_DOWN);
     }
-    
+
     /**
      * Updates the ghost's direction and rotation based on movement key.
-     * 
+     *
      * @param direction The direction constant (DIRECTION_UP, DIRECTION_DOWN, etc.)
      */
     public void updateRotation(int direction) {
         currentDirection = direction;
-        
+
         Transform3D rotationTransform = new Transform3D();
-        
+
         // Apply rotation based on direction
         switch (direction) {
             case DIRECTION_LEFT:  // A key - 90 degrees left from down
                 rotationTransform.rotY(-Math.PI / 2);
                 break;
-                
+
             case DIRECTION_UP:    // W key - 180 degrees from down
                 rotationTransform.rotY(Math.PI);
                 break;
-                
+
             case DIRECTION_RIGHT: // D key - 90 degrees right from down
                 rotationTransform.rotY(Math.PI / 2);
                 break;
-                
+
             case DIRECTION_DOWN:  // S key - default position
                 break;
             case DIRECTION_DOWNLEFT:
@@ -109,10 +109,10 @@ public class GhostModel {
                 // No rotation needed for down direction
                 break;
         }
-        
+
         rotationTG.setTransform(rotationTransform);
     }
-    
+
     /**
      * Loads the 3D model and applies color and scaling.
      */
@@ -125,18 +125,18 @@ public class GhostModel {
             // Load the OBJ file
             Scene modelScene = loader.load(MODEL_PATH);
             BranchGroup modelBG = modelScene.getSceneGroup();
-            
+
             // Create appearance with the selected color
             Appearance coloredAppearance = new Appearance();
             Material material = new Material(
-                modelColor,                      // Ambient color
-                new Color3f(0.1f, 0.1f, 0.1f),   // Emissive color
-                modelColor,                      // Diffuse color
-                new Color3f(1.0f, 1.0f, 1.0f),   // Specular color
-                64.0f                            // Shininess
+                    modelColor,                      // Ambient color
+                    new Color3f(0.1f, 0.1f, 0.1f),   // Emissive color
+                    modelColor,                      // Diffuse color
+                    new Color3f(1.0f, 1.0f, 1.0f),   // Specular color
+                    64.0f                            // Shininess
             );
             coloredAppearance.setMaterial(material);
-            
+
             // Apply the appearance to all shapes in the model
             applyAppearanceToModel(modelBG, coloredAppearance);
 
@@ -154,7 +154,7 @@ public class GhostModel {
             e.printStackTrace();
         }
     }
-    
+
     private void applyAppearanceToModel(Node node, Appearance appearance) {
         if (node instanceof Shape3D) {
             Shape3D shape = (Shape3D) node;
@@ -167,16 +167,16 @@ public class GhostModel {
             }
         }
     }
-    
+
     public void updatePosition(double newX, double newZ) {
         position.x = newX;
         position.z = newZ;
-        
+
         Transform3D newTransform = new Transform3D();
         newTransform.setTranslation(position);
         modelRootTG.setTransform(newTransform);
     }
-    
+
     /**
      * Update both position and rotation based on movement
      */
@@ -184,23 +184,23 @@ public class GhostModel {
         // Update position
         position.x = newX;
         position.z = newZ;
-        
+
         Transform3D newTransform = new Transform3D();
         newTransform.setTranslation(position);
         modelRootTG.setTransform(newTransform);
-        
+
         // Update rotation
         updateRotation(direction);
     }
-    
+
     public TransformGroup getTransformGroup() {
         return modelRootTG;
     }
-    
+
     public Vector3d getPosition() {
         return new Vector3d(position);
     }
-    
+
     public static double getCharacterHalf() {
         return CHARACTER_HALF;
     }
@@ -208,7 +208,7 @@ public class GhostModel {
     public boolean isRedPlayer() {
         return isRedPlayer;
     }
-    
+
     public int getCurrentDirection() {
         return currentDirection;
     }
