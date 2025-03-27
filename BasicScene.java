@@ -707,23 +707,6 @@ public class BasicScene extends JPanel {
         sceneBG.addChild(mazeSign.getTransformGroup());
     }
 
-    // Update the createMazeSigns method
-    private void createMazeSigns(BranchGroup sceneBG) {
-        // Calculate position for the North West sign
-        double cornerX = 0.9;  // Adjust based on your maze size
-        double cornerZ = 0.9;  // Adjust based on your maze size
-        double signHeight = 0.3;  // Height above the ground
-        
-        // Create only the North West sign with "The Maze" text
-        mazeSign = new MazeSign(
-            new Vector3d(-cornerX, signHeight, -cornerZ), 
-            "The Maze"
-        );
-        
-        // Add the sign to the scene
-        sceneBG.addChild(mazeSign.getTransformGroup());
-    }
-
     private BranchGroup createTreasure(double x, double y, double z) {
         if (treasureAppearance == null) {
             treasureAppearance = new Appearance();
