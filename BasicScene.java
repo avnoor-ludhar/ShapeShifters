@@ -245,7 +245,7 @@ public class BasicScene extends JPanel {
                 new Color3f(1.0f, 1.0f, 1.0f),  // Specular color
                 64.0f));  // Shininess
 
-        String floorTexturePath = "src/ShapeShifters/Textures/QuartzFloorTexture.jpg";
+        String floorTexturePath = "src/Shapeshifters/Textures/QuartzFloorTexture.jpg";
         try {
             URL floorTextureURL = new File(floorTexturePath).toURI().toURL();
             Texture floorTexture = new TextureLoader(floorTextureURL, "RGB", new java.awt.Container()).getTexture();
@@ -272,7 +272,7 @@ public class BasicScene extends JPanel {
         // Create maze walls.
         Appearance wallAppearance = new Appearance();
         // Load wall texture.
-        String wallTexturePath = "src/ShapeShifters/Textures/WhiteWallTexture.jpg";
+        String wallTexturePath = "src/Shapeshifters/Textures/WhiteWallTexture.jpg";
         try {
             URL wallTextureURL = new File(wallTexturePath).toURI().toURL();
             Texture wallTexture = new TextureLoader(wallTextureURL, "RGB", new java.awt.Container()).getTexture();
@@ -446,61 +446,82 @@ public class BasicScene extends JPanel {
 
     // Update the player's movement based on key states.
     private void updateMovement() {
-        double newX, newZ;
+        //first try both x and z, then x, then z. If any of them happen then return
+        double dx = 0;
+        double dz = 0;
+        double oldX, oldZ, newX, newZ;
+        oldX = 0;
+        oldZ = 0;
+        newX = 0;
+        newZ = 0;
         if (playerId == 1) {
-            newX = redBoxPos.x;
-            newZ = redBoxPos.z;
+            oldX = redBoxPos.x;
+            oldZ = redBoxPos.z;
         } else {
-            newX = blueBoxPos.x;
-            newZ = blueBoxPos.z;
+            oldX = blueBoxPos.x;
+            oldZ = blueBoxPos.z;
         }
-        
-        double dx = 0, dz = 0;
-        int direction = -1; // Track which direction we're moving
-        
-        if (upPressed) {
-            dz -= STEP;
-            direction = GhostModel.DIRECTION_UP;
-        }
-        if (downPressed) {
-            dz += STEP;
-            direction = GhostModel.DIRECTION_DOWN;
-        }
-        if (leftPressed) {
-            dx -= STEP;
-            direction = GhostModel.DIRECTION_LEFT;
-        }
-        if (rightPressed) {
-            dx += STEP;
-            direction = GhostModel.DIRECTION_RIGHT;
-        }
-        
-        // Normalize diagonal movement to keep speed consistent.
-        if (dx != 0 || dz != 0) {
-            double length = Math.sqrt(dx * dx + dz * dz);
-            dx = dx / length * STEP;
-            dz = dz / length * STEP;
-            
-            // For diagonal movement, prioritize the last key pressed
-            // If multiple keys are pressed simultaneously, we'll use the horizontal direction
-            if (dx != 0 && dz != 0) {
-                if (dx < 0 && dz > 0) {
-                    direction = GhostModel.DIRECTION_DOWNLEFT;
-                } else if (dx < 0 && dz < 0) {
-                    direction = GhostModel.DIRECTION_UPLEFT;
-                } else if (dx > 0 && dz > 0) {
-                    direction = GhostModel.DIRECTION_DOWNRIGHT;
-                } else {
-                    direction = GhostModel.DIRECTION_UPRIGHT;
-                }
+
+        int direction = -1;
+        boolean[][] combos = {{true, true}, {true, false}, {false, true}, {false, false}};
+        for (boolean[] combo: combos) {
+            boolean changeX = combo[0];
+            boolean changeZ = combo[1];
+            dx = 0;
+            dz = 0;
+            newX = oldX;
+            newZ = oldZ;
+            direction = -1; // Track which direction we're moving
+
+            if (upPressed && changeZ) {
+                dz -= STEP;
+                direction = GhostModel.DIRECTION_UP;
             }
-        } else {
-            // If no keys are pressed, return without updating
-            return;
+            if (downPressed && changeZ) {
+                dz += STEP;
+                direction = GhostModel.DIRECTION_DOWN;
+            }
+            if (leftPressed && changeX) {
+                dx -= STEP;
+                direction = GhostModel.DIRECTION_LEFT;
+            }
+            if (rightPressed && changeX) {
+                dx += STEP;
+                direction = GhostModel.DIRECTION_RIGHT;
+            }
+
+            // Normalize diagonal movement to keep speed consistent.
+            if (dx != 0 || dz != 0) {
+                double length = Math.sqrt(dx * dx + dz * dz);
+                dx = dx / length * STEP;
+                dz = dz / length * STEP;
+
+                // For diagonal movement, prioritize the last key pressed
+                // If multiple keys are pressed simultaneously, we'll use the horizontal direction
+                if (dx != 0 && dz != 0) {
+                    if (dx < 0 && dz > 0) {
+                        direction = GhostModel.DIRECTION_DOWNLEFT;
+                    } else if (dx < 0 && dz < 0) {
+                        direction = GhostModel.DIRECTION_UPLEFT;
+                    } else if (dx > 0 && dz > 0) {
+                        direction = GhostModel.DIRECTION_DOWNRIGHT;
+                    } else {
+                        direction = GhostModel.DIRECTION_UPRIGHT;
+                    }
+                }
+            } else {
+                // If no keys are pressed, return without updating
+                return;
+            }
+
+            newX += dx;
+            newZ += dz;
+            if (collidesWithWall(newX, newZ)) {
+                continue;
+            } else {
+                break;
+            }
         }
-        
-        newX += dx;
-        newZ += dz;
 
         if (!collidesWithWall(newX, newZ)) {
             if (playerId == 1) {
@@ -582,7 +603,7 @@ public class BasicScene extends JPanel {
     // Play footstep sound effect.
     private void playFootstepSound() {
         try {
-            File soundFile = new File("src/ShapeShifters/sounds/footsteps.wav");
+            File soundFile = new File("src/Shapeshifters/sounds/footsteps.wav");
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
             javax.sound.sampled.Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
@@ -595,7 +616,7 @@ public class BasicScene extends JPanel {
     // Play wall collision sound effect.
     private void playWallCollisionSound() {
         try {
-            File soundFile = new File("src/ShapeShifters/sounds/wallCollide.wav");
+            File soundFile = new File("src/Shapeshifters/sounds/wallCollide.wav");
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
             javax.sound.sampled.Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
