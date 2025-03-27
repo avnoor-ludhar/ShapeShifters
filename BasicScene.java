@@ -103,6 +103,9 @@ public class BasicScene extends JPanel {
     private BranchGroup rootBG;
     private TreasureKeyBehavior treasureKeyBehavior;
 
+    // Add these field declarations to the class
+    private MazeSign mazeSign; // Renamed to be more generic since we only have one sign
+
     // --- Constructors ---
     public BasicScene() {
         this("localhost", "Player");
@@ -263,6 +266,12 @@ public class BasicScene extends JPanel {
         platformTG.addChild(platform);
         sceneBG.addChild(platformTG);
 
+        // Add four corner signs
+        createMazeSigns(sceneBG);
+
+        // Add four corner signs
+        createMazeSigns(sceneBG);
+
         redGhost = new GhostModel(true, redBoxPos);
         blueGhost = new GhostModel(false, blueBoxPos);
         sceneBG.addChild(redGhost.getTransformGroup());
@@ -389,6 +398,7 @@ public class BasicScene extends JPanel {
         spotlightTG = spotlightTransformGroup;
     }
 
+    // Universe and input setup.
     public void setupUniverse(BranchGroup sceneBG) {
         GraphicsConfiguration config = SimpleUniverse.getPreferredConfiguration();
         canvas = new Canvas3D(config);
@@ -439,57 +449,82 @@ public class BasicScene extends JPanel {
     }
 
     private void updateMovement() {
-        double newX, newZ;
+        //first try both x and z, then x, then z. If any of them happen then return
+        double dx = 0;
+        double dz = 0;
+        double oldX, oldZ, newX, newZ;
+        oldX = 0;
+        oldZ = 0;
+        newX = 0;
+        newZ = 0;
         if (playerId == 1) {
-            newX = redBoxPos.x;
-            newZ = redBoxPos.z;
+            oldX = redBoxPos.x;
+            oldZ = redBoxPos.z;
         } else {
-            newX = blueBoxPos.x;
-            newZ = blueBoxPos.z;
+            oldX = blueBoxPos.x;
+            oldZ = blueBoxPos.z;
         }
 
-        double dx = 0, dz = 0;
         int direction = -1;
+        boolean[][] combos = {{true, true}, {true, false}, {false, true}, {false, false}};
+        for (boolean[] combo: combos) {
+            boolean changeX = combo[0];
+            boolean changeZ = combo[1];
+            dx = 0;
+            dz = 0;
+            newX = oldX;
+            newZ = oldZ;
+            direction = -1; // Track which direction we're moving
 
-        if (upPressed) {
-            dz -= STEP;
-            direction = GhostModel.DIRECTION_UP;
-        }
-        if (downPressed) {
-            dz += STEP;
-            direction = GhostModel.DIRECTION_DOWN;
-        }
-        if (leftPressed) {
-            dx -= STEP;
-            direction = GhostModel.DIRECTION_LEFT;
-        }
-        if (rightPressed) {
-            dx += STEP;
-            direction = GhostModel.DIRECTION_RIGHT;
-        }
-
-        if (dx != 0 || dz != 0) {
-            double length = Math.sqrt(dx * dx + dz * dz);
-            dx = dx / length * STEP;
-            dz = dz / length * STEP;
-
-            if (dx != 0 && dz != 0) {
-                if (dx < 0 && dz > 0) {
-                    direction = GhostModel.DIRECTION_DOWNLEFT;
-                } else if (dx < 0 && dz < 0) {
-                    direction = GhostModel.DIRECTION_UPLEFT;
-                } else if (dx > 0 && dz > 0) {
-                    direction = GhostModel.DIRECTION_DOWNRIGHT;
-                } else {
-                    direction = GhostModel.DIRECTION_UPRIGHT;
-                }
+            if (upPressed && changeZ) {
+                dz -= STEP;
+                direction = GhostModel.DIRECTION_UP;
             }
-        } else {
-            return;
-        }
+            if (downPressed && changeZ) {
+                dz += STEP;
+                direction = GhostModel.DIRECTION_DOWN;
+            }
+            if (leftPressed && changeX) {
+                dx -= STEP;
+                direction = GhostModel.DIRECTION_LEFT;
+            }
+            if (rightPressed && changeX) {
+                dx += STEP;
+                direction = GhostModel.DIRECTION_RIGHT;
+            }
 
-        newX += dx;
-        newZ += dz;
+            // Normalize diagonal movement to keep speed consistent.
+            if (dx != 0 || dz != 0) {
+                double length = Math.sqrt(dx * dx + dz * dz);
+                dx = dx / length * STEP;
+                dz = dz / length * STEP;
+
+                // For diagonal movement, prioritize the last key pressed
+                // If multiple keys are pressed simultaneously, we'll use the horizontal direction
+                if (dx != 0 && dz != 0) {
+                    if (dx < 0 && dz > 0) {
+                        direction = GhostModel.DIRECTION_DOWNLEFT;
+                    } else if (dx < 0 && dz < 0) {
+                        direction = GhostModel.DIRECTION_UPLEFT;
+                    } else if (dx > 0 && dz > 0) {
+                        direction = GhostModel.DIRECTION_DOWNRIGHT;
+                    } else {
+                        direction = GhostModel.DIRECTION_UPRIGHT;
+                    }
+                }
+            } else {
+                // If no keys are pressed, return without updating
+                return;
+            }
+
+            newX += dx;
+            newZ += dz;
+            if (collidesWithWall(newX, newZ)) {
+                continue;
+            } else {
+                break;
+            }
+        }
 
         if (!collidesWithWall(newX, newZ)) {
             if (playerId == 1) {
@@ -559,7 +594,7 @@ public class BasicScene extends JPanel {
 
     private void playFootstepSound() {
         try {
-            File soundFile = new File("src/ShapeShifters/sounds/footsteps.wav");
+            File soundFile = new File("src/Shapeshifters/sounds/footsteps.wav");
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
             javax.sound.sampled.Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
@@ -571,7 +606,7 @@ public class BasicScene extends JPanel {
 
     private void playWallCollisionSound() {
         try {
-            File soundFile = new File("src/ShapeShifters/sounds/wallCollide.wav");
+            File soundFile = new File("src/Shapeshifters/sounds/wallCollide.wav");
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
             javax.sound.sampled.Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
@@ -653,6 +688,40 @@ public class BasicScene extends JPanel {
                 e.printStackTrace();
             }
         }).start();
+    }
+
+    // Update the createMazeSigns method
+    private void createMazeSigns(BranchGroup sceneBG) {
+        // Calculate position for the North West sign
+        double cornerX = 0.9;  // Adjust based on your maze size
+        double cornerZ = 0.9;  // Adjust based on your maze size
+        double signHeight = 0.3;  // Height above the ground
+        
+        // Create only the North West sign with "The Maze" text
+        mazeSign = new MazeSign(
+            new Vector3d(-cornerX, signHeight, -cornerZ), 
+            "The Maze"
+        );
+        
+        // Add the sign to the scene
+        sceneBG.addChild(mazeSign.getTransformGroup());
+    }
+
+    // Update the createMazeSigns method
+    private void createMazeSigns(BranchGroup sceneBG) {
+        // Calculate position for the North West sign
+        double cornerX = 0.9;  // Adjust based on your maze size
+        double cornerZ = 0.9;  // Adjust based on your maze size
+        double signHeight = 0.3;  // Height above the ground
+        
+        // Create only the North West sign with "The Maze" text
+        mazeSign = new MazeSign(
+            new Vector3d(-cornerX, signHeight, -cornerZ), 
+            "The Maze"
+        );
+        
+        // Add the sign to the scene
+        sceneBG.addChild(mazeSign.getTransformGroup());
     }
 
     private BranchGroup createTreasure(double x, double y, double z) {
