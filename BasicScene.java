@@ -100,7 +100,7 @@ public class BasicScene extends JPanel {
     private String username;
     private Canvas3D canvas;
     private BranchGroup rootBG;
-    private static PickTool pickTool = null;
+    private TreasureKeyBehavior treasureKeyBehavior;
 
     // --- Constructors ---
     public BasicScene() {
@@ -325,8 +325,14 @@ public class BasicScene extends JPanel {
             sceneBG.addChild(npc.getTransformGroup());
         }
 
+
         if (treasureGroup != null) {
             sceneBG.addChild(treasureGroup);
+
+            // Create and add treasure behavior
+            treasureKeyBehavior = new TreasureKeyBehavior(treasureGroup, redBoxPos, blueBoxPos, playerId);
+            treasureKeyBehavior.setSchedulingBounds(new BoundingSphere(new Point3d(0,0,0), 100.0));
+            sceneBG.addChild(treasureKeyBehavior);
         }
 
         createSpotlight(sceneBG);
@@ -334,11 +340,6 @@ public class BasicScene extends JPanel {
         this.rootBG = sceneBG;
         rootBG.setCapability(BranchGroup.ALLOW_CHILDREN_EXTEND);
         rootBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
-
-        if (pickTool == null) {
-            pickTool = new PickTool(rootBG);
-            pickTool.setMode(PickTool.BOUNDS);
-        }
 
         sceneBG.compile();
         return sceneBG;
@@ -391,7 +392,7 @@ public class BasicScene extends JPanel {
         GraphicsConfiguration config = SimpleUniverse.getPreferredConfiguration();
         canvas = new Canvas3D(config);
 
-        // Update key listener to handle movement and treasure toggle ('e').
+        // Update key listener to handle movement and treasure toggle
         canvas.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
@@ -400,22 +401,6 @@ public class BasicScene extends JPanel {
                     case 's': downPressed = true; break;
                     case 'a': leftPressed = true; break;
                     case 'd': rightPressed = true; break;
-                    case 'e':
-                        // Check if player is close enough to interact with treasure.
-                        if (treasureGroup != null) {
-                            Transform3D treasureTransform = new Transform3D();
-                            treasureGroup.getTransform(treasureTransform);
-                            Vector3d treasurePos = new Vector3d();
-                            treasureTransform.get(treasurePos);
-                            Vector3d playerPos = (playerId == 1) ? redBoxPos : blueBoxPos;
-                            Vector3d diff = new Vector3d();
-                            diff.sub(treasurePos, playerPos);
-                            if (diff.length() < TREASURE_INTERACT_DISTANCE && treasureIsCoin) {
-                                morphTreasureToStar();
-                                treasureIsCoin = false;
-                            }
-                        }
-                        break;
                     default:
                         break;
                 }
@@ -509,10 +494,12 @@ public class BasicScene extends JPanel {
             if (playerId == 1) {
                 redBoxPos.x = newX;
                 redBoxPos.z = newZ;
+                treasureKeyBehavior.updateRedPosition(redBoxPos);
                 redGhost.updatePositionAndRotation(newX, newZ, direction);
             } else {
                 blueBoxPos.x = newX;
                 blueBoxPos.z = newZ;
+                treasureKeyBehavior.updateBluePosition(blueBoxPos);
                 blueGhost.updatePositionAndRotation(newX, newZ, direction);
             }
 
