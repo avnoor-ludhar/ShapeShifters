@@ -96,6 +96,9 @@ public class BasicScene extends JPanel {
     private String ipAddress;
     private String username;
 
+    // Add these field declarations to the class
+    private MazeSign mazeSign; // Renamed to be more generic since we only have one sign
+
     // --- Constructors ---
     // Default constructor uses localhost and a default username.
     public BasicScene() {
@@ -263,6 +266,9 @@ public class BasicScene extends JPanel {
         platformTG.addChild(platform);
         sceneBG.addChild(platformTG);
 
+        // Add four corner signs
+        createMazeSigns(sceneBG);
+
         // Create ghost models for players.
         redGhost = new GhostModel(true, redBoxPos);
         blueGhost = new GhostModel(false, blueBoxPos);
@@ -391,8 +397,6 @@ public class BasicScene extends JPanel {
         sceneBG.addChild(spotlightTransformGroup);
         spotlightTG = spotlightTransformGroup;
     }
-
-
 
     // Universe and input setup.
     public void setupUniverse(BranchGroup sceneBG) {
@@ -578,8 +582,6 @@ public class BasicScene extends JPanel {
         Vector3d spotlightPos = new Vector3d(localPos.x, 0.8, localPos.z);
         spotlightTransform.setTranslation(spotlightPos);
         spotlightTG.setTransform(spotlightTransform);
-
-
     }
 
     // Collision detection using bounding rectangles.
@@ -703,6 +705,23 @@ public class BasicScene extends JPanel {
                 e.printStackTrace();
             }
         }).start();
+    }
+
+    // Update the createMazeSigns method
+    private void createMazeSigns(BranchGroup sceneBG) {
+        // Calculate position for the North West sign
+        double cornerX = 0.9;  // Adjust based on your maze size
+        double cornerZ = 0.9;  // Adjust based on your maze size
+        double signHeight = 0.3;  // Height above the ground
+        
+        // Create only the North West sign with "The Maze" text
+        mazeSign = new MazeSign(
+            new Vector3d(-cornerX, signHeight, -cornerZ), 
+            "The Maze"
+        );
+        
+        // Add the sign to the scene
+        sceneBG.addChild(mazeSign.getTransformGroup());
     }
 
     // --- Main ---
