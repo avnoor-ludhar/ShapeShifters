@@ -12,7 +12,7 @@ import org.jogamp.vecmath.*;
 public class NPC {
     // Model constants
     private static final double MODEL_SCALE = 0.05;
-    private static final String MODEL_PATH = "src/Shapeshifters/assets/ghost.obj";
+    private static final String MODEL_PATH = "src/ShapeShifters/assets/ghost.obj";
     private static final double CHARACTER_HALF = 0.03; // Match this with GhostModel or adjust as needed
     
     // Transform hierarchy
