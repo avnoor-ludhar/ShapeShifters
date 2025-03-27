@@ -1,29 +1,33 @@
 package ShapeShifters;
-// First, create a behavior class similar to FanKeyBehavior
 
 import org.jogamp.java3d.*;
 import java.awt.event.KeyEvent;
 import java.awt.AWTEvent;
 import java.util.Iterator;
-
-import org.jogamp.vecmath.Color3f;
-import org.jogamp.vecmath.Point3f;
-import org.jogamp.vecmath.Vector3d;
-import org.jogamp.vecmath.Point3d;
+import org.jogamp.vecmath.*;
 
 public class TreasureKeyBehavior extends Behavior {
     private WakeupOnAWTEvent wakeupEvent;
+    private BranchGroup treasureBranchGroup;
     private TransformGroup treasureGroup;
     private boolean treasureIsCoin = true;
     private static final double TREASURE_INTERACT_DISTANCE = 0.15;
     private Vector3d redBoxPos, blueBoxPos;
     private int playerId;
+    private BranchGroup rootBG; // Reference to scene's root BranchGroup
 
-    public TreasureKeyBehavior(TransformGroup treasureGroup, Vector3d redBoxPos, Vector3d blueBoxPos, int playerId) {
+    public TreasureKeyBehavior(BranchGroup treasureBranchGroup,
+                               TransformGroup treasureGroup,
+                               Vector3d redBoxPos,
+                               Vector3d blueBoxPos,
+                               int playerId,
+                               BranchGroup rootBG) {
+        this.treasureBranchGroup = treasureBranchGroup;
         this.treasureGroup = treasureGroup;
         this.redBoxPos = redBoxPos;
         this.blueBoxPos = blueBoxPos;
         this.playerId = playerId;
+        this.rootBG = rootBG;
     }
 
     public void updateRedPosition(Vector3d newPos) {
@@ -61,25 +65,20 @@ public class TreasureKeyBehavior extends Behavior {
                         if (ke.getID() == KeyEvent.KEY_PRESSED) {
                             int code = ke.getKeyCode();
                             if (code == KeyEvent.VK_E) {
-                                // Check if player is close enough to interact with treasure
                                 if (treasureGroup != null) {
-                                    // Get treasure position (translation component only)
                                     Transform3D treasureTransform = new Transform3D();
                                     treasureGroup.getTransform(treasureTransform);
                                     Vector3d treasurePos = new Vector3d();
                                     treasureTransform.get(treasurePos);
 
-                                    // Get player position safely
                                     Vector3d playerPos = new Vector3d();
                                     synchronized(playerId == 1 ? redBoxPos : blueBoxPos) {
                                         playerPos.set(playerId == 1 ? redBoxPos : blueBoxPos);
                                     }
 
-                                    // Calculate distance
                                     Vector3d diff = new Vector3d();
                                     diff.sub(treasurePos, playerPos);
 
-                                    // Check distance and state
                                     if (diff.length() < TREASURE_INTERACT_DISTANCE && treasureIsCoin) {
                                         morphTreasureToStar();
                                         treasureIsCoin = false;
@@ -95,9 +94,18 @@ public class TreasureKeyBehavior extends Behavior {
     }
 
     private void morphTreasureToStar() {
-        if (treasureGroup == null) return;
-        treasureGroup.removeAllChildren();
+        if (treasureBranchGroup == null || treasureGroup == null || rootBG == null) {
+            return;
+        }
 
+        // 1. Get current position
+        Transform3D currentPosition = new Transform3D();
+        treasureGroup.getTransform(currentPosition);
+
+        // 2. Detach the old treasure from scene graph
+        treasureBranchGroup.detach();
+
+        // 3. Create new star content
         TransformGroup rotationTG = new TransformGroup();
         rotationTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
 
@@ -124,8 +132,26 @@ public class TreasureKeyBehavior extends Behavior {
         rotator.setSchedulingBounds(new BoundingSphere(new Point3d(0, 0, 0), 100.0));
         rotationTG.addChild(rotator);
 
-        treasureGroup.addChild(rotationTG);
-        treasureGroup.setUserData("treasure");
+        // 4. Create new TransformGroup with same position
+        TransformGroup newTreasureTG = new TransformGroup(currentPosition);
+        newTreasureTG.setCapability(TransformGroup.ALLOW_TRANSFORM_READ);
+        newTreasureTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
+        newTreasureTG.addChild(rotationTG);
+        newTreasureTG.setUserData("treasure");
+
+        // 5. Create new BranchGroup and add to scene
+        BranchGroup newTreasureBG = new BranchGroup();
+        newTreasureBG.setCapability(BranchGroup.ALLOW_CHILDREN_READ);
+        newTreasureBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
+        newTreasureBG.setCapability(BranchGroup.ALLOW_DETACH);
+        newTreasureBG.addChild(newTreasureTG);
+
+        // 6. Update references
+        this.treasureBranchGroup = newTreasureBG;
+        this.treasureGroup = newTreasureTG;
+
+        // 7. Add the new treasure to the scene
+        rootBG.addChild(newTreasureBG);
     }
 
     private Shape3D createStarShape(float radius, float height, Appearance appearance) {

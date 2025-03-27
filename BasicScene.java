@@ -89,6 +89,7 @@ public class BasicScene extends JPanel {
     private Random random = new Random();
 
     // Treasure (coin/star) variables
+    private BranchGroup treasureBranchGroup;
     private TransformGroup treasureGroup; // Reference to the treasure's TransformGroup
     private Appearance treasureAppearance; // Appearance for the treasure
     // NEW: Define a constant for interaction distance and a flag to track state.
@@ -177,7 +178,7 @@ public class BasicScene extends JPanel {
                 double tx = Double.parseDouble(parts[1]);
                 double ty = Double.parseDouble(parts[2]);
                 double tz = Double.parseDouble(parts[3]);
-                treasureGroup = createTreasure(tx, ty, tz);
+                treasureBranchGroup = createTreasure(tx, ty, tz);
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -326,11 +327,11 @@ public class BasicScene extends JPanel {
         }
 
 
-        if (treasureGroup != null) {
-            sceneBG.addChild(treasureGroup);
+        if (treasureBranchGroup != null) {
+            sceneBG.addChild(treasureBranchGroup);
 
             // Create and add treasure behavior
-            treasureKeyBehavior = new TreasureKeyBehavior(treasureGroup, redBoxPos, blueBoxPos, playerId);
+            treasureKeyBehavior = new TreasureKeyBehavior(treasureBranchGroup, treasureGroup, redBoxPos, blueBoxPos, playerId, sceneBG);
             treasureKeyBehavior.setSchedulingBounds(new BoundingSphere(new Point3d(0,0,0), 100.0));
             sceneBG.addChild(treasureKeyBehavior);
         }
@@ -654,8 +655,7 @@ public class BasicScene extends JPanel {
         }).start();
     }
 
-    // Create the treasure (coin) with an initial coin shape.
-    private TransformGroup createTreasure(double x, double y, double z) {
+    private BranchGroup createTreasure(double x, double y, double z) {
         if (treasureAppearance == null) {
             treasureAppearance = new Appearance();
             treasureAppearance.setMaterial(new Material(
@@ -666,6 +666,7 @@ public class BasicScene extends JPanel {
                     64.0f));
         }
 
+        // Create the coin shape (same as before)
         float radius = 0.025f;
         float height = 0.005f;
         Cylinder treasureDisk = new Cylinder(radius, height,
@@ -677,6 +678,7 @@ public class BasicScene extends JPanel {
         treasureDisk.setPickable(true);
         treasureDisk.setUserData("treasure");
 
+        // Create the transformation hierarchy (same as before)
         Transform3D coinRotation = new Transform3D();
         coinRotation.rotZ(Math.PI/2);
 
@@ -698,62 +700,21 @@ public class BasicScene extends JPanel {
         Transform3D position = new Transform3D();
         position.setTranslation(new Vector3d(x, y, z));
         TransformGroup positionedTG = new TransformGroup(position);
-        // NEW: Enable both transform read and write for later interaction.
         positionedTG.setCapability(TransformGroup.ALLOW_TRANSFORM_READ);
         positionedTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
         positionedTG.addChild(rotationTG);
         positionedTG.setUserData("treasure");
 
-        return positionedTG;
-    }
+        this.treasureGroup = positionedTG;
 
-    // Morph the coin treasure into a star.
-    private void morphTreasureToStar() {
-        if (treasureGroup == null) return;
-        treasureGroup.removeAllChildren();
+        // Wrap the TransformGroup in a BranchGroup
+        BranchGroup treasureBG = new BranchGroup();
+        treasureBG.setCapability(BranchGroup.ALLOW_CHILDREN_READ);
+        treasureBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
+        treasureBG.setCapability(BranchGroup.ALLOW_DETACH);
+        treasureBG.addChild(positionedTG);
 
-        TransformGroup rotationTG = new TransformGroup();
-        rotationTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
-
-        Shape3D starShape = createStarShape(0.025f, 0.005f, treasureAppearance);
-        starShape.setPickable(true);
-        rotationTG.addChild(starShape);
-
-        Alpha rotationAlpha = new Alpha(-1, Alpha.INCREASING_ENABLE,
-                0, 0, 4000, 0, 0, 0, 0, 0);
-        Transform3D yAxis = new Transform3D();
-        RotationInterpolator rotator = new RotationInterpolator(
-                rotationAlpha,
-                rotationTG,
-                yAxis,
-                0.0f, (float) (Math.PI * 2.0f));
-        rotator.setSchedulingBounds(new BoundingSphere(new Point3d(0, 0, 0), 100.0));
-        rotationTG.addChild(rotator);
-
-        treasureGroup.addChild(rotationTG);
-        treasureGroup.setUserData("treasure");
-    }
-
-    // Helper method to create a star shape.
-    private Shape3D createStarShape(float radius, float height, Appearance appearance) {
-        int numPoints = 5;
-        int numVertices = numPoints * 2;
-        Point3f[] frontVertices = new Point3f[numVertices + 1];
-        frontVertices[0] = new Point3f(0.0f, 0.0f, height / 2);
-        float innerFactor = 0.5f;
-        for (int i = 0; i < numVertices; i++) {
-            double angle = Math.PI / 2 + i * Math.PI / numPoints;
-            float r = (i % 2 == 0) ? radius : radius * innerFactor;
-            float x = (float)(r * Math.cos(angle));
-            float y = (float)(r * Math.sin(angle));
-            frontVertices[i + 1] = new Point3f(x, y, height / 2);
-        }
-        int[] stripCounts = { numVertices + 1 };
-        TriangleFanArray frontFace = new TriangleFanArray(numVertices + 1,
-                GeometryArray.COORDINATES, stripCounts);
-        frontFace.setCoordinates(0, frontVertices);
-
-        return new Shape3D(frontFace, appearance);
+        return treasureBG;
     }
 
     public static void main(String[] args) {
