@@ -3,10 +3,7 @@ package ShapeShifters;
 import java.awt.BorderLayout;
 import java.awt.GraphicsConfiguration;
 import java.awt.Point;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.event.*;
 import java.awt.geom.Rectangle2D;
 import java.io.*;
 import java.net.*;
@@ -19,17 +16,19 @@ import javax.swing.Timer;
 import org.jogamp.java3d.*;
 import org.jogamp.java3d.utils.geometry.Box;
 import org.jogamp.java3d.utils.image.TextureLoader;
+import org.jogamp.java3d.utils.picking.PickTool;
 import org.jogamp.java3d.utils.universe.SimpleUniverse;
 import org.jogamp.vecmath.*;
 
-public class BasicScene extends JPanel {
+public class BasicScene extends JPanel implements MouseListener {
     private static final long serialVersionUID = 1L;
     private static JFrame frame;
 
     // Ghost models for players (using GhostModel)
     private GhostModel redGhost;
     private GhostModel blueGhost;
-
+    private Canvas3D canvas;
+    private PickTool pickTool;
     // Player positions (x, y, z) – y remains constant at 0.1.
     // Using the "box" version from stashed changes.
     private Vector3d redBoxPos = new Vector3d(0.0, 0.1, 0.0);
@@ -273,7 +272,7 @@ public class BasicScene extends JPanel {
         redGhost = new GhostModel(true, redBoxPos);
         blueGhost = new GhostModel(false, blueBoxPos);
         sceneBG.addChild(redGhost.getTransformGroup());
-        sceneBG.addChild(blueGhost.getTransformGroup());
+        //blue ghost added farther down to PickTool
 
         // Create maze walls.
         Appearance wallAppearance = new Appearance();
@@ -345,6 +344,14 @@ public class BasicScene extends JPanel {
         // Create a spotlight that follows the player.
         createSpotlight(sceneBG);
 
+        TransformGroup blueGhostTransform = blueGhost.getTransformGroup();
+        BranchGroup blueGhostBranch = new BranchGroup();
+        blueGhostBranch.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
+        blueGhostBranch.addChild(blueGhostTransform);
+        sceneBG.addChild(blueGhostBranch);
+        pickTool = new PickTool(blueGhostBranch);                 // initialize 'pickTool' and allow 'cubeBG' pickable
+        pickTool.setMode(PickTool.BOUNDS);
+
         sceneBG.compile();
         return sceneBG;
     }
@@ -401,8 +408,8 @@ public class BasicScene extends JPanel {
     // Universe and input setup.
     public void setupUniverse(BranchGroup sceneBG) {
         GraphicsConfiguration config = SimpleUniverse.getPreferredConfiguration();
-        Canvas3D canvas = new Canvas3D(config);
-
+        canvas = new Canvas3D(config);
+        canvas.addMouseListener(this);
         // Set up key listener to update movement state.
         canvas.addKeyListener(new KeyAdapter() {
             @Override
@@ -723,6 +730,39 @@ public class BasicScene extends JPanel {
         // Add the sign to the scene
         sceneBG.addChild(mazeSign.getTransformGroup());
     }
+
+    public void mouseExited(MouseEvent e) {}
+    public void mousePressed(MouseEvent e){}
+    public void mouseReleased(MouseEvent e) {}
+    public void mouseEntered(MouseEvent e) {}
+    public void mouseClicked(MouseEvent e) {
+        Point3d pixelPos = new Point3d();
+        Point3d eyePos = new Point3d();
+        canvas.getPixelLocationInImagePlate(e.getX(), e.getY(), pixelPos);
+        canvas.getCenterEyeInImagePlate(eyePos);
+
+        Transform3D ip2vw = new Transform3D();
+        canvas.getImagePlateToVworld(ip2vw);
+        ip2vw.transform(pixelPos);
+        ip2vw.transform(eyePos);
+
+        Vector3d rayDirection = new Vector3d();
+        rayDirection.sub(pixelPos, eyePos);
+        rayDirection.normalize();
+
+        pickTool.setShapeRay(eyePos, rayDirection);
+//        System.out.println(pickTool.pickClosest());
+        if (pickTool.pickClosest() != null) {
+            double dist = Math.pow((Math.pow(redBoxPos.x - blueBoxPos.x, 2) + Math.pow(redBoxPos.z - blueBoxPos.z, 2)), .5);
+            if (dist < .5f && playerId == 1) {
+                blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
+                blueGhost.updatePositionAndRotation(blueBoxPos.x, blueBoxPos.z, GhostModel.DIRECTION_DOWN);
+            }
+        }
+
+        return;
+    }
+
 
     // --- Main ---
     public static void main(String[] args) {
