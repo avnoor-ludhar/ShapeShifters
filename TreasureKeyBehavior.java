@@ -1,6 +1,5 @@
 package ShapeShifters;
 
-import org.jdesktop.j3d.examples.morphing.MorphingBehavior;
 import org.jogamp.java3d.*;
 import org.jogamp.vecmath.*;
 
