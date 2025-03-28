@@ -18,18 +18,20 @@ import org.jogamp.java3d.utils.geometry.Box;
 import org.jogamp.java3d.utils.geometry.Primitive;
 import org.jogamp.java3d.utils.geometry.Cylinder;
 import org.jogamp.java3d.utils.image.TextureLoader;
+import org.jogamp.java3d.utils.picking.PickTool;
 import org.jogamp.java3d.utils.universe.SimpleUniverse;
 import org.jogamp.vecmath.*;
 import org.jogamp.java3d.utils.picking.PickTool;
 
-public class BasicScene extends JPanel {
+public class BasicScene extends JPanel implements MouseListener {
     private static final long serialVersionUID = 1L;
     private static JFrame frame;
 
     // Ghost models for players (using GhostModel)
     private GhostModel redGhost;
     private GhostModel blueGhost;
-
+    private Canvas3D canvas;
+    private PickTool pickTool;
     // Player positions (x, y, z) – y remains constant at 0.1.
     private Vector3d redBoxPos = new Vector3d(0.0, 0.1, 0.0);
     private Vector3d blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
@@ -275,7 +277,7 @@ public class BasicScene extends JPanel {
         redGhost = new GhostModel(true, redBoxPos);
         blueGhost = new GhostModel(false, blueBoxPos);
         sceneBG.addChild(redGhost.getTransformGroup());
-        sceneBG.addChild(blueGhost.getTransformGroup());
+        //blue ghost added farther down to PickTool
 
         Appearance wallAppearance = new Appearance();
         String wallTexturePath = "src/ShapeShifters/Textures/WhiteWallTexture.jpg";
@@ -347,6 +349,14 @@ public class BasicScene extends JPanel {
 
         createSpotlight(sceneBG);
 
+        TransformGroup blueGhostTransform = blueGhost.getTransformGroup();
+        BranchGroup blueGhostBranch = new BranchGroup();
+        blueGhostBranch.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
+        blueGhostBranch.addChild(blueGhostTransform);
+        sceneBG.addChild(blueGhostBranch);
+        pickTool = new PickTool(blueGhostBranch);                 // initialize 'pickTool' and allow 'cubeBG' pickable
+        pickTool.setMode(PickTool.BOUNDS);
+
         this.rootBG = sceneBG;
         rootBG.setCapability(BranchGroup.ALLOW_CHILDREN_EXTEND);
         rootBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
@@ -402,8 +412,8 @@ public class BasicScene extends JPanel {
     public void setupUniverse(BranchGroup sceneBG) {
         GraphicsConfiguration config = SimpleUniverse.getPreferredConfiguration();
         canvas = new Canvas3D(config);
-
-        // Update key listener to handle movement and treasure toggle
+        canvas.addMouseListener(this);
+        // Set up key listener to update movement state.
         canvas.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
@@ -706,6 +716,72 @@ public class BasicScene extends JPanel {
         // Add the sign to the scene
         sceneBG.addChild(mazeSign.getTransformGroup());
     }
+
+    public void mouseExited(MouseEvent e) {}
+    public void mousePressed(MouseEvent e){}
+    public void mouseReleased(MouseEvent e) {}
+    public void mouseEntered(MouseEvent e) {}
+    public void mouseClicked(MouseEvent e) {
+        Point3d pixelPos = new Point3d();
+        Point3d eyePos = new Point3d();
+        canvas.getPixelLocationInImagePlate(e.getX(), e.getY(), pixelPos);
+        canvas.getCenterEyeInImagePlate(eyePos);
+
+        Transform3D ip2vw = new Transform3D();
+        canvas.getImagePlateToVworld(ip2vw);
+        ip2vw.transform(pixelPos);
+        ip2vw.transform(eyePos);
+
+        Vector3d rayDirection = new Vector3d();
+        rayDirection.sub(pixelPos, eyePos);
+        rayDirection.normalize();
+
+        pickTool.setShapeRay(eyePos, rayDirection);
+//        System.out.println(pickTool.pickClosest());
+        if (pickTool.pickClosest() != null) {
+            double dist = Math.pow((Math.pow(redBoxPos.x - blueBoxPos.x, 2) + Math.pow(redBoxPos.z - blueBoxPos.z, 2)), .5);
+            if (dist < .5f && playerId == 1) {
+                blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
+                blueGhost.updatePositionAndRotation(blueBoxPos.x, blueBoxPos.z, GhostModel.DIRECTION_DOWN);
+            }
+        }
+
+        return;
+    }
+
+
+    public void mouseExited(MouseEvent e) {}
+    public void mousePressed(MouseEvent e){}
+    public void mouseReleased(MouseEvent e) {}
+    public void mouseEntered(MouseEvent e) {}
+    public void mouseClicked(MouseEvent e) {
+        Point3d pixelPos = new Point3d();
+        Point3d eyePos = new Point3d();
+        canvas.getPixelLocationInImagePlate(e.getX(), e.getY(), pixelPos);
+        canvas.getCenterEyeInImagePlate(eyePos);
+
+        Transform3D ip2vw = new Transform3D();
+        canvas.getImagePlateToVworld(ip2vw);
+        ip2vw.transform(pixelPos);
+        ip2vw.transform(eyePos);
+
+        Vector3d rayDirection = new Vector3d();
+        rayDirection.sub(pixelPos, eyePos);
+        rayDirection.normalize();
+
+        pickTool.setShapeRay(eyePos, rayDirection);
+//        System.out.println(pickTool.pickClosest());
+        if (pickTool.pickClosest() != null) {
+            double dist = Math.pow((Math.pow(redBoxPos.x - blueBoxPos.x, 2) + Math.pow(redBoxPos.z - blueBoxPos.z, 2)), .5);
+            if (dist < .5f && playerId == 1) {
+                blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
+                blueGhost.updatePositionAndRotation(blueBoxPos.x, blueBoxPos.z, GhostModel.DIRECTION_DOWN);
+            }
+        }
+
+        return;
+    }
+
 
     private BranchGroup createTreasure(double x, double y, double z) {
         if (treasureAppearance == null) {
