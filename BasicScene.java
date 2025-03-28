@@ -101,7 +101,6 @@ public class BasicScene extends JPanel implements MouseListener {
     // Fields for IP address and username
     private String ipAddress;
     private String username;
-    private Canvas3D canvas;
     private BranchGroup rootBG;
     private TreasureKeyBehavior treasureKeyBehavior;
 
@@ -715,38 +714,6 @@ public class BasicScene extends JPanel implements MouseListener {
         
         // Add the sign to the scene
         sceneBG.addChild(mazeSign.getTransformGroup());
-    }
-
-    public void mouseExited(MouseEvent e) {}
-    public void mousePressed(MouseEvent e){}
-    public void mouseReleased(MouseEvent e) {}
-    public void mouseEntered(MouseEvent e) {}
-    public void mouseClicked(MouseEvent e) {
-        Point3d pixelPos = new Point3d();
-        Point3d eyePos = new Point3d();
-        canvas.getPixelLocationInImagePlate(e.getX(), e.getY(), pixelPos);
-        canvas.getCenterEyeInImagePlate(eyePos);
-
-        Transform3D ip2vw = new Transform3D();
-        canvas.getImagePlateToVworld(ip2vw);
-        ip2vw.transform(pixelPos);
-        ip2vw.transform(eyePos);
-
-        Vector3d rayDirection = new Vector3d();
-        rayDirection.sub(pixelPos, eyePos);
-        rayDirection.normalize();
-
-        pickTool.setShapeRay(eyePos, rayDirection);
-//        System.out.println(pickTool.pickClosest());
-        if (pickTool.pickClosest() != null) {
-            double dist = Math.pow((Math.pow(redBoxPos.x - blueBoxPos.x, 2) + Math.pow(redBoxPos.z - blueBoxPos.z, 2)), .5);
-            if (dist < .5f && playerId == 1) {
-                blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
-                blueGhost.updatePositionAndRotation(blueBoxPos.x, blueBoxPos.z, GhostModel.DIRECTION_DOWN);
-            }
-        }
-
-        return;
     }
 
 
