@@ -384,8 +384,8 @@ public class BasicScene extends JPanel implements MouseListener {
         Scene s1 = null;
         Scene s2 = null;
         try {
-            s1 = f.load("FanBlades.obj");
-            s2 = f.load("FanBlades.obj");
+            s1 = f.load("src/ShapeShifters/assets/FanBlades.obj");
+            s2 = f.load("src/ShapeShifters/assets/FanBlades.obj");
         } catch (Exception e) {}
         if (s1 == null || s2 == null) {
             System.exit(1); //this won't happen dw
