@@ -17,11 +17,14 @@ import org.jogamp.java3d.*;
 import org.jogamp.java3d.loaders.Scene;
 import org.jogamp.java3d.loaders.objectfile.ObjectFile;
 import org.jogamp.java3d.utils.geometry.Box;
+import org.jogamp.java3d.utils.geometry.Primitive;
+import org.jogamp.java3d.utils.geometry.Cylinder;
 import org.jogamp.java3d.utils.geometry.Cylinder;
 import org.jogamp.java3d.utils.image.TextureLoader;
 import org.jogamp.java3d.utils.picking.PickTool;
 import org.jogamp.java3d.utils.universe.SimpleUniverse;
 import org.jogamp.vecmath.*;
+import org.jogamp.java3d.utils.picking.PickTool;
 
 public class BasicScene extends JPanel implements MouseListener {
     private static final long serialVersionUID = 1L;
@@ -33,25 +36,21 @@ public class BasicScene extends JPanel implements MouseListener {
     private Canvas3D canvas;
     private PickTool pickTool;
     // Player positions (x, y, z) – y remains constant at 0.1.
-    // Using the "box" version from stashed changes.
     private Vector3d redBoxPos = new Vector3d(0.0, 0.1, 0.0);
     private Vector3d blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
-    // Movement step (reduced from 0.025 to 0.010 for slower movement)
     private final double STEP = 0.010;
 
-    // Maze collision data: each wall's bounding rectangle (and its grid coordinates)
+    // Maze collision data
     private HashMap<Rectangle2D.Double, Point> wallBounds = new HashMap<>();
 
-    // Maze dimensions and layout (maze is provided by the server)
     private static final int MAZE_HEIGHT = 20;
     private static final int MAZE_WIDTH = 20;
     private static int[][] walls = new int[MAZE_HEIGHT][MAZE_WIDTH];
 
-    // Moving wall data (with Alpha interpolators)
     private static HashSet<Point> movingWalls = new HashSet<>();
     private static HashMap<Point, Alpha> movingWallAlphas = new HashMap<>();
 
-    // NPC integration (if any)
+    // NPC integration
     private List<NPC> npcs = new ArrayList<>();
     private final double NPC_STEP = 0.01;
     private Appearance npcAppearance;
@@ -85,7 +84,7 @@ public class BasicScene extends JPanel implements MouseListener {
     private boolean leftPressed = false;
     private boolean rightPressed = false;
 
-    // Star system (from your local version)
+    // Star system variables
     private static final int STAR_COUNT = 15000;
     private static final int SHOOTING_STAR_COUNT = 150;
     private static final float STAR_FIELD_RADIUS = 10.0f;
@@ -94,37 +93,42 @@ public class BasicScene extends JPanel implements MouseListener {
     private PointArray shootingStarPoints;
     private Random random = new Random();
 
+    // Treasure (coin/star) variables
+    private BranchGroup treasureBranchGroup;
+    private TransformGroup treasureGroup; // Reference to the treasure's TransformGroup
+    private Appearance treasureAppearance; // Appearance for the treasure
+    // NEW: Define a constant for interaction distance and a flag to track state.
+    private static final double TREASURE_INTERACT_DISTANCE = 0.15;
+    private boolean treasureIsCoin = true;
+
     // Fields for IP address and username
     private String ipAddress;
     private String username;
+    private BranchGroup rootBG;
+    private TreasureKeyBehavior treasureKeyBehavior;
 
     // Add these field declarations to the class
     private MazeSign mazeSign; // Renamed to be more generic since we only have one sign
 
     // --- Constructors ---
-    // Default constructor uses localhost and a default username.
     public BasicScene() {
         this("localhost", "Player");
     }
 
-    // Constructor with IP address and username.
     public BasicScene(String ipAddress, String username) {
         this.ipAddress = ipAddress;
         this.username = username;
         try {
-            // Connect to server on port 5001.
             socket = new Socket(ipAddress, 5001);
             out = new PrintWriter(socket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-            // Read assigned player ID.
             String idLine = in.readLine();
             if (idLine != null && idLine.startsWith("ID ")) {
                 playerId = Integer.parseInt(idLine.substring(3).trim());
                 System.out.println("Assigned player ID: " + playerId);
             }
 
-            // Read maze data (sent as a concatenated string).
             String mazeStr = in.readLine();
             int index = 0;
             if (mazeStr != null) {
@@ -136,7 +140,6 @@ public class BasicScene extends JPanel implements MouseListener {
                 }
             }
 
-            // Read moving wall coordinates (expecting 4 lines).
             long offset = System.currentTimeMillis() % 19000;
             Alpha a = new Alpha(-1, Alpha.INCREASING_ENABLE | Alpha.DECREASING_ENABLE,
                     0, 19000 - offset, 2000, 0, 5000, 2000, 0, 10000);
@@ -150,7 +153,6 @@ public class BasicScene extends JPanel implements MouseListener {
                 }
             }
 
-            // Read NPC initialization data (if any).
             npcAppearance = new Appearance();
             npcAppearance.setMaterial(new Material(
                     new Color3f(0.0f, 1.0f, 0.0f),
@@ -176,16 +178,23 @@ public class BasicScene extends JPanel implements MouseListener {
                     }
                 }
             }
+
+            String treasureCoordsLine = in.readLine();
+            if (treasureCoordsLine != null && treasureCoordsLine.startsWith("TREASURE")) {
+                String[] parts = treasureCoordsLine.split(" ");
+                double tx = Double.parseDouble(parts[1]);
+                double ty = Double.parseDouble(parts[2]);
+                double tz = Double.parseDouble(parts[3]);
+                treasureBranchGroup = createTreasure(tx, ty, tz);
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        // Start a thread to listen for server messages.
         new Thread(() -> {
             String line;
             try {
                 while ((line = in.readLine()) != null) {
-                    // Handle NPC updates.
                     if (line.startsWith("NPC_UPDATE")) {
                         String[] tokens = line.split(" ");
                         for (int i = 1; i < tokens.length; i += 4) {
@@ -200,7 +209,6 @@ public class BasicScene extends JPanel implements MouseListener {
                         }
                         continue;
                     }
-                    // Otherwise, assume it's a player position update.
                     String[] tokens = line.split(" ");
                     if (tokens.length < 4)
                         continue;
@@ -208,14 +216,12 @@ public class BasicScene extends JPanel implements MouseListener {
                     double x = Double.parseDouble(tokens[1]);
                     double y = Double.parseDouble(tokens[2]);
                     double z = Double.parseDouble(tokens[3]);
-                    
-                    // Handle direction if it's included in the message
-                    int direction = GhostModel.DIRECTION_DOWN; // Default
+
+                    int direction = GhostModel.DIRECTION_DOWN;
                     if (tokens.length >= 5) {
                         direction = Integer.parseInt(tokens[4]);
                     }
-                    
-                    // Update ghost models with position and rotation
+
                     if (id == 1 && redGhost != null) {
                         redGhost.updatePositionAndRotation(x, z, direction);
                     } else if (id == 2 && blueGhost != null) {
@@ -232,16 +238,13 @@ public class BasicScene extends JPanel implements MouseListener {
     public BranchGroup createScene() {
         BranchGroup sceneBG = new BranchGroup();
 
-        // Set background to almost pure black
         Background background = new Background(new Color3f(0.01f, 0.01f, 0.01f));
         BoundingSphere bounds = new BoundingSphere(new Point3d(0, 0, 0), 100.0);
         background.setApplicationBounds(bounds);
         sceneBG.addChild(background);
 
-        // Create dynamic star system.
         createStarSystem(sceneBG);
 
-        // Create platform with textured floor.
         Appearance platformAppearance = new Appearance();
         platformAppearance.setMaterial(new Material(
                 new Color3f(0.8f, 0.8f, 0.8f),  // Increased ambient reflection
@@ -250,7 +253,7 @@ public class BasicScene extends JPanel implements MouseListener {
                 new Color3f(1.0f, 1.0f, 1.0f),  // Specular color
                 64.0f));  // Shininess
 
-        String floorTexturePath = "src/ShapeShifters/Textures/QuartzFloorTexture.jpg";
+        String floorTexturePath = "src/Shapeshifters/Textures/QuartzFloorTexture.jpg";
         try {
             URL floorTextureURL = new File(floorTexturePath).toURI().toURL();
             Texture floorTexture = new TextureLoader(floorTextureURL, "RGB", new java.awt.Container()).getTexture();
@@ -271,15 +274,15 @@ public class BasicScene extends JPanel implements MouseListener {
         // Add four corner signs
         createMazeSigns(sceneBG);
 
-        // Create ghost models for players.
+        // Add four corner signs
+        createMazeSigns(sceneBG);
+
         redGhost = new GhostModel(true, redBoxPos);
         blueGhost = new GhostModel(false, blueBoxPos);
         sceneBG.addChild(redGhost.getTransformGroup());
         //blue ghost added farther down to PickTool
 
-        // Create maze walls.
         Appearance wallAppearance = new Appearance();
-        // Load wall texture.
         String wallTexturePath = "src/ShapeShifters/Textures/WhiteWallTexture.jpg";
         try {
             URL wallTextureURL = new File(wallTexturePath).toURI().toURL();
@@ -297,25 +300,20 @@ public class BasicScene extends JPanel implements MouseListener {
         wallMat.setDiffuseColor(new Color3f(1.0f, 1.0f, 1.0f));
         wallAppearance.setMaterial(wallMat);
 
-        // Extremely dim ambient light
         AmbientLight ambientLight = new AmbientLight(new Color3f(0.05f, 0.05f, 0.05f));
         ambientLight.setInfluencingBounds(bounds);
         sceneBG.addChild(ambientLight);
-
-        // Extremely dim directional light
         DirectionalLight directionalLight = new DirectionalLight(
                 new Color3f(0.0f, 0.0f, 0.0f),
                 new Vector3f(-1.0f, -1.0f, -1.0f));
         directionalLight.setInfluencingBounds(bounds);
         sceneBG.addChild(directionalLight);
 
-        // Clear a central area in the maze.
         for (int i = 5; i < 15; i++) {
             for (int j = 5; j < 15; j++) {
                 walls[i][j] = 0;
             }
         }
-        // Add wall boxes based on maze layout.
         for (int i = 0; i < MAZE_HEIGHT; i++) {
             for (int j = 0; j < MAZE_WIDTH; j++) {
                 if (walls[i][j] == 1) {
@@ -323,7 +321,6 @@ public class BasicScene extends JPanel implements MouseListener {
                             -1 + i * 0.103f, 0.1f, -1 + j * 0.103f,
                             0.055f, 0.05f, 0.055f,
                             wallAppearance, i, j);
-                    // If this wall is moving, add a PositionInterpolator.
                     if (movingWalls.contains(new Point(i, j))) {
                         tg.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
                         tg.setCapability(TransformGroup.ALLOW_TRANSFORM_READ);
@@ -339,12 +336,20 @@ public class BasicScene extends JPanel implements MouseListener {
             }
         }
 
-        // Add any NPCs.
         for (NPC npc : npcs) {
             sceneBG.addChild(npc.getTransformGroup());
         }
 
-        // Create a spotlight that follows the player.
+
+        if (treasureBranchGroup != null) {
+            sceneBG.addChild(treasureBranchGroup);
+
+            // Create and add treasure behavior
+            treasureKeyBehavior = new TreasureKeyBehavior(treasureBranchGroup, treasureGroup, redBoxPos, blueBoxPos, playerId, sceneBG);
+            treasureKeyBehavior.setSchedulingBounds(new BoundingSphere(new Point3d(0,0,0), 100.0));
+            sceneBG.addChild(treasureKeyBehavior);
+        }
+
         createSpotlight(sceneBG);
 
         TransformGroup blueGhostTransform = blueGhost.getTransformGroup();
@@ -433,6 +438,9 @@ public class BasicScene extends JPanel implements MouseListener {
         spinRight.addChild(rightTG);
         midBoxTG.addChild(spinRight);
 
+        this.rootBG = sceneBG;
+        rootBG.setCapability(BranchGroup.ALLOW_CHILDREN_EXTEND);
+        rootBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
 
         sceneBG.compile();
         return sceneBG;
@@ -460,7 +468,6 @@ public class BasicScene extends JPanel implements MouseListener {
         return spinner;
     }
 
-    // Helper method to add a wall and record its collision bounds.
     private TransformGroup addWall(BranchGroup sceneBG, double x, double y, double z,
                                    double width, double height, double depth,
                                    Appearance appearance, int i, int j) {
@@ -482,27 +489,22 @@ public class BasicScene extends JPanel implements MouseListener {
         return container;
     }
 
-    // Create a spotlight that follows the player.
     private void createSpotlight(BranchGroup sceneBG) {
         spotlightTG = new TransformGroup();
         spotlightTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
-
-        Point3f initialPosition = new Point3f(0.0f, 0.2f, 0.0f);  // Slightly higher
+        Point3f initialPosition = new Point3f(0.0f, 0.2f, 0.0f);
         Vector3f initialDirection = new Vector3f(0.0f, -1.0f, 0.0f);
-        Color3f lightColor = new Color3f(1.0f, 0.95f, 0.6f);  // Slightly warmer, brighter white
-
+        Color3f lightColor = new Color3f(1.0f, 0.95f, 0.6f);
         spotlight = new SpotLight(lightColor, initialPosition, new Point3f(1.0f, 0.05f, 0.01f),
                 initialDirection,
-                (float) Math.PI / 2,  // Wider spread to cover more area
-                50.0f);  // Higher concentration for more focused light
-
+                (float) Math.PI / 2,
+                50.0f);
         spotlight.setCapability(Light.ALLOW_STATE_WRITE);
         Transform3D lightTransform = new Transform3D();
         lightTransform.setTranslation(new Vector3d(initialPosition));
         TransformGroup spotlightTransformGroup = new TransformGroup(lightTransform);
         spotlightTransformGroup.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
         spotlightTransformGroup.addChild(spotlight);
-
         lightBounds = new BoundingSphere(new Point3d(0, 0, 0), 100.0);
         spotlight.setInfluencingBounds(lightBounds);
         sceneBG.addChild(spotlightTransformGroup);
@@ -539,10 +541,10 @@ public class BasicScene extends JPanel implements MouseListener {
                 }
             }
         });
+
         canvas.setFocusable(true);
         canvas.requestFocusInWindow();
 
-        // Timer for smooth continuous movement (approx. 60fps).
         Timer movementTimer = new Timer(16, new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -559,7 +561,6 @@ public class BasicScene extends JPanel implements MouseListener {
         add("Center", canvas);
     }
 
-    // Update the player's movement based on key states.
     private void updateMovement() {
         //first try both x and z, then x, then z. If any of them happen then return
         double dx = 0;
@@ -642,20 +643,19 @@ public class BasicScene extends JPanel implements MouseListener {
             if (playerId == 1) {
                 redBoxPos.x = newX;
                 redBoxPos.z = newZ;
-                // Use updatePositionAndRotation instead of just updatePosition
+                treasureKeyBehavior.updateRedPosition(redBoxPos);
                 redGhost.updatePositionAndRotation(newX, newZ, direction);
             } else {
                 blueBoxPos.x = newX;
                 blueBoxPos.z = newZ;
-                // Use updatePositionAndRotation instead of just updatePosition
+                treasureKeyBehavior.updateBluePosition(blueBoxPos);
                 blueGhost.updatePositionAndRotation(newX, newZ, direction);
             }
-            
+
             if (out != null) {
-                // Send rotation information to the server
                 out.println(playerId + " " + newX + " " + 0.1 + " " + newZ + " " + direction);
             }
-            
+
             updateCamera();
             updateSpotlight();
             if ((dx != 0 || dz != 0) && (System.currentTimeMillis() - lastFootstepTime > FOOTSTEP_COOLDOWN)) {
@@ -670,13 +670,10 @@ public class BasicScene extends JPanel implements MouseListener {
         }
     }
 
-    // Update the camera so it follows the local player's box.
     private void updateCamera() {
         Vector3d localPos = (playerId == 1) ? redBoxPos : blueBoxPos;
-        // Slightly lower the vertical offset for a better view
         Point3d eye = new Point3d(localPos.x, localPos.y + 0.6, localPos.z + 0.5);
         Point3d center = new Point3d(localPos.x, localPos.y, localPos.z);
-        // Using an up vector (0,0,-1) as in your code; adjust if necessary.
         Vector3d up = new Vector3d(0, 0, -1);
         Transform3D viewTransform = new Transform3D();
         viewTransform.lookAt(eye, center, up);
@@ -684,24 +681,19 @@ public class BasicScene extends JPanel implements MouseListener {
         universe.getViewingPlatform().getViewPlatformTransform().setTransform(viewTransform);
     }
 
-    // Update spotlight position.
     private void updateSpotlight() {
-        // Use the same position vector as for movement.
         Vector3d localPos = (playerId == 1) ? redBoxPos : blueBoxPos;
         Transform3D spotlightTransform = new Transform3D();
-        // Position spotlight directly above the player, slightly higher
         Vector3d spotlightPos = new Vector3d(localPos.x, 0.8, localPos.z);
         spotlightTransform.setTranslation(spotlightPos);
         spotlightTG.setTransform(spotlightTransform);
     }
 
-    // Collision detection using bounding rectangles.
     private boolean collidesWithWall(double x, double z) {
-        double half = GhostModel.getCharacterHalf();  // Use ghost model collision half
+        double half = GhostModel.getCharacterHalf();
         double side = 2 * half;
         Rectangle2D.Double boxRect = new Rectangle2D.Double(x - half, z - half, side, side);
         for (Rectangle2D.Double wallRect : wallBounds.keySet()) {
-            // If wall is moving and its Alpha value is high (i.e. "open"), skip collision.
             Point coords = wallBounds.get(wallRect);
             if (movingWallAlphas.containsKey(coords)) {
                 float alphaValue = movingWallAlphas.get(coords).value();
@@ -713,7 +705,6 @@ public class BasicScene extends JPanel implements MouseListener {
         return false;
     }
 
-    // Play footstep sound effect.
     private void playFootstepSound() {
         try {
             File soundFile = new File("src/ShapeShifters/sounds/footsteps.wav");
@@ -726,7 +717,6 @@ public class BasicScene extends JPanel implements MouseListener {
         }
     }
 
-    // Play wall collision sound effect.
     private void playWallCollisionSound() {
         try {
             File soundFile = new File("src/ShapeShifters/sounds/wallCollide.wav");
@@ -739,13 +729,11 @@ public class BasicScene extends JPanel implements MouseListener {
         }
     }
 
-    // Star system: create static stars and shooting stars.
     private void createStarSystem(BranchGroup sceneBG) {
         Transform3D starSystemTransform = new Transform3D();
         starSystemTG = new TransformGroup(starSystemTransform);
         starSystemTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
 
-        // Create static stars.
         PointArray starPoints = new PointArray(STAR_COUNT, GeometryArray.COORDINATES | GeometryArray.COLOR_3);
         for (int i = 0; i < STAR_COUNT; i++) {
             double theta = 2.0 * Math.PI * random.nextDouble();
@@ -764,7 +752,6 @@ public class BasicScene extends JPanel implements MouseListener {
         Shape3D starShape = new Shape3D(starPoints, starAppearance);
         starSystemTG.addChild(starShape);
 
-        // Create shooting stars.
         shootingStarPoints = new PointArray(SHOOTING_STAR_COUNT, GeometryArray.COORDINATES | GeometryArray.COLOR_3);
         shootingStarPoints.setCapability(GeometryArray.ALLOW_COORDINATE_WRITE);
         shootingStarPoints.setCapability(GeometryArray.ALLOW_COLOR_WRITE);
@@ -783,7 +770,6 @@ public class BasicScene extends JPanel implements MouseListener {
         startShootingStarAnimation();
     }
 
-    // Initialize a shooting star at a random position.
     private void initializeShootingStar(int index) {
         double angle = random.nextDouble() * 2.0 * Math.PI;
         float x = STAR_FIELD_RADIUS * 0.9f;
@@ -793,7 +779,6 @@ public class BasicScene extends JPanel implements MouseListener {
         shootingStarPoints.setColor(index, new Color3f(1.0f, 0.9f, 0.5f));
     }
 
-    // Animate shooting stars.
     private void startShootingStarAnimation() {
         new Thread(() -> {
             try {
@@ -835,6 +820,7 @@ public class BasicScene extends JPanel implements MouseListener {
         sceneBG.addChild(mazeSign.getTransformGroup());
     }
 
+
     public void mouseExited(MouseEvent e) {}
     public void mousePressed(MouseEvent e){}
     public void mouseReleased(MouseEvent e) {}
@@ -868,10 +854,70 @@ public class BasicScene extends JPanel implements MouseListener {
     }
 
 
-    // --- Main ---
+    private BranchGroup createTreasure(double x, double y, double z) {
+        if (treasureAppearance == null) {
+            treasureAppearance = new Appearance();
+            treasureAppearance.setMaterial(new Material(
+                    new Color3f(1.0f, 0.84f, 0.0f),
+                    new Color3f(0.0f, 0.0f, 0.0f),
+                    new Color3f(1.0f, 0.84f, 0.0f),
+                    new Color3f(1.0f, 1.0f, 1.0f),
+                    64.0f));
+        }
+
+        // Create the coin shape (same as before)
+        float radius = 0.025f;
+        float height = 0.005f;
+        Cylinder treasureDisk = new Cylinder(radius, height,
+                Primitive.GENERATE_NORMALS | Primitive.GENERATE_TEXTURE_COORDS,
+                treasureAppearance);
+
+        treasureDisk.setCapability(Shape3D.ALLOW_PICKABLE_READ);
+        treasureDisk.setCapability(Shape3D.ALLOW_PICKABLE_WRITE);
+        treasureDisk.setPickable(true);
+        treasureDisk.setUserData("treasure");
+
+        // Create the transformation hierarchy (same as before)
+        Transform3D coinRotation = new Transform3D();
+        coinRotation.rotZ(Math.PI/2);
+
+        TransformGroup coinOrientationTG = new TransformGroup(coinRotation);
+        coinOrientationTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
+        coinOrientationTG.addChild(treasureDisk);
+        coinOrientationTG.setUserData("treasure");
+
+        TransformGroup rotationTG = new TransformGroup();
+        rotationTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
+        rotationTG.addChild(coinOrientationTG);
+
+        Alpha rotationAlpha = new Alpha(-1, Alpha.INCREASING_ENABLE, 0, 0, 4000, 0, 0, 0, 0, 0);
+        RotationInterpolator rotator = new RotationInterpolator(
+                rotationAlpha, rotationTG, new Transform3D(), 0.0f, (float)(Math.PI*2));
+        rotator.setSchedulingBounds(new BoundingSphere(new Point3d(0,0,0), 100.0));
+        rotationTG.addChild(rotator);
+
+        Transform3D position = new Transform3D();
+        position.setTranslation(new Vector3d(x, y, z));
+        TransformGroup positionedTG = new TransformGroup(position);
+        positionedTG.setCapability(TransformGroup.ALLOW_TRANSFORM_READ);
+        positionedTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
+        positionedTG.addChild(rotationTG);
+        positionedTG.setUserData("treasure");
+
+        this.treasureGroup = positionedTG;
+
+        // Wrap the TransformGroup in a BranchGroup
+        BranchGroup treasureBG = new BranchGroup();
+        treasureBG.setCapability(BranchGroup.ALLOW_CHILDREN_READ);
+        treasureBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
+        treasureBG.setCapability(BranchGroup.ALLOW_DETACH);
+        treasureBG.addChild(positionedTG);
+
+        return treasureBG;
+    }
+
     public static void main(String[] args) {
         frame = new JFrame("Basic Scene: Maze View (Networking, Ghosts, Star System, Sound & Spotlight)");
-        // For testing, dummy IP/username values are used.
         BasicScene basicScene = new BasicScene("localhost", "Player1");
         BranchGroup sceneBG = basicScene.createScene();
         basicScene.setupUniverse(sceneBG);
