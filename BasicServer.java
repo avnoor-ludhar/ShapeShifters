@@ -134,24 +134,29 @@ public class BasicServer {
                         if (CollisionDetector.isColliding(npcPos.x, npcPos.z, npcHalf,
                                 playerPos.x, playerPos.z, playerHalf)) {
 
-                            Vector3d pushBack = new Vector3d(
+                            // Calculate collision normal (NPC to player direction)
+                            Vector3d collisionNormal = new Vector3d(
                                     playerPos.x - npcPos.x,
                                     0,
                                     playerPos.z - npcPos.z
                             );
-                            pushBack.normalize();
-                            pushBack.scale(0.05); // Adjust push strength
+                            collisionNormal.normalize();
 
-                            Vector3d correctedPlayerPos = new Vector3d(
-                                    playerPos.x + pushBack.x,
+                            // Reflect NPC's direction using the collision normal
+                            Vector3d newDirection = new Vector3d(npc.getDirection());
+                            double dot = newDirection.dot(collisionNormal);
+                            newDirection.x -= 2 * dot * collisionNormal.x;
+                            newDirection.z -= 2 * dot * collisionNormal.z;
+                            newDirection.normalize();
+
+                            // Update NPC direction and position
+                            npc.setDirection(newDirection);
+                            Vector3d newNPCPos = new Vector3d(
+                                    npcPos.x - collisionNormal.x * npc.getStep(),
                                     0.1,
-                                    playerPos.z + pushBack.z
+                                    npcPos.z - collisionNormal.z * npc.getStep()
                             );
-
-                            int affectedPlayerId = entry.getKey();
-                            // Update all clients with corrected position
-                            broadcast(affectedPlayerId + " " + correctedPlayerPos.x + " " +
-                                    0.1 + " " + correctedPlayerPos.z, null);
+                            npc.setPosition(newNPCPos);
                         }
                     }
                 }
