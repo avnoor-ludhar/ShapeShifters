@@ -321,7 +321,7 @@ public class BasicScene extends JPanel implements MouseListener {
                     TransformGroup tg = addWall(sceneBG,
                             -1 + i * 0.103f, 0.1f, -1 + j * 0.103f,
                             0.055f, 0.05f, 0.055f,
-                            wallAppearance, i, j);
+                            wallAppearance, i, j, true);
                     if (movingWalls.contains(new Point(i, j))) {
                         tg.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
                         tg.setCapability(TransformGroup.ALLOW_TRANSFORM_READ);
@@ -337,14 +337,22 @@ public class BasicScene extends JPanel implements MouseListener {
             }
         }
 
-//        for (NPC npc : npcs) {
-//            sceneBG.addChild(npc.getTransformGroup());
-//        }
 
         BranchGroup npcBG = new BranchGroup();
         npcBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
         for (NPC npc: npcs) {
             npcBG.addChild(npc.getTransformGroup());
+        }
+      
+        for (int i = 11; i < 14; i++) {
+            for (int j = 11; j < 14; j++) {
+                addWall(sceneBG,
+                        -1 + i * 0.103f, 0.1f, -1 + j * 0.103f,
+                        0.055f, 0.05f, 0.055f,
+                        wallAppearance, i, j, false);
+            }
+        }
+
         }
         bluePickTool = new PickTool(npcBG);
         bluePickTool.setMode(PickTool.BOUNDS);
@@ -375,8 +383,8 @@ public class BasicScene extends JPanel implements MouseListener {
 
         Cylinder base = new Cylinder(0.1f, .2f);
         Transform3D baseTransform = new Transform3D();
-        baseTransform.setTranslation(new Vector3f(.3f, 0.1f, .3f)); // upright
-        baseTransform.setScale(.6f);
+        baseTransform.setTranslation(new Vector3f(.23f, 0.1f, .23f)); // upright
+        baseTransform.setScale(.45f);
         TransformGroup baseTG = new TransformGroup();
         baseTG.setTransform(baseTransform);
         baseTG.addChild(base);
@@ -483,15 +491,26 @@ public class BasicScene extends JPanel implements MouseListener {
 
     private TransformGroup addWall(BranchGroup sceneBG, double x, double y, double z,
                                    double width, double height, double depth,
-                                   Appearance appearance, int i, int j) {
-        Transform3D transform = new Transform3D();
-        transform.setTranslation(new Vector3d(x, y, z));
-        TransformGroup tg = new TransformGroup(transform);
-        TransformGroup container = new TransformGroup();
-        container.addChild(tg);
-        Box wall = new Box((float) width, (float) height, (float) depth,
-                Box.GENERATE_NORMALS | Box.GENERATE_TEXTURE_COORDS, appearance);
-        tg.addChild(wall);
+                                   Appearance appearance, int i, int j, boolean render) {
+        if (render) {
+            Transform3D transform = new Transform3D();
+            transform.setTranslation(new Vector3d(x, y, z));
+            TransformGroup tg = new TransformGroup(transform);
+            TransformGroup container = new TransformGroup();
+            container.addChild(tg);
+            Box wall = new Box((float) width, (float) height, (float) depth,
+                    Box.GENERATE_NORMALS | Box.GENERATE_TEXTURE_COORDS, appearance);
+            tg.addChild(wall);
+            double left = x - width;
+            double top = z + depth;
+            double rectWidth = 2 * width;
+            double rectHeight = 2 * depth;
+            double bottom = top - rectHeight;
+            Rectangle2D.Double wallRect = new Rectangle2D.Double(left, bottom, rectWidth, rectHeight);
+            wallBounds.put(wallRect, new Point(i, j));
+            return container;
+        }
+
         double left = x - width;
         double top = z + depth;
         double rectWidth = 2 * width;
@@ -499,7 +518,7 @@ public class BasicScene extends JPanel implements MouseListener {
         double bottom = top - rectHeight;
         Rectangle2D.Double wallRect = new Rectangle2D.Double(left, bottom, rectWidth, rectHeight);
         wallBounds.put(wallRect, new Point(i, j));
-        return container;
+        return null;
     }
 
     private void createSpotlight(BranchGroup sceneBG) {
