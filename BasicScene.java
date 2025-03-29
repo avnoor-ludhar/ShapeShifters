@@ -353,7 +353,6 @@ public class BasicScene extends JPanel implements MouseListener {
             }
         }
 
-        }
         bluePickTool = new PickTool(npcBG);
         bluePickTool.setMode(PickTool.BOUNDS);
         sceneBG.addChild(npcBG);
