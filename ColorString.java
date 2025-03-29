@@ -1,2 +1,61 @@
-package ShapeShifters;public class ColorString {
+package ShapeShifters;
+
+import java.awt.Font;
+import org.jogamp.java3d.*;
+import org.jogamp.vecmath.*;
+
+public class ColorString {
+    private String str;
+    private Color3f clr;
+    private double scl;
+    private Point3f pos;
+    private TransformGroup tg;
+
+    public ColorString(String str_ltrs, Color3f str_clr, double s, Point3f p) {
+        this.str = str_ltrs;
+        this.clr = str_clr;
+        this.scl = s;
+        this.pos = p;
+
+        // Combine transformations for scaling, etc.
+        Transform3D combined = new Transform3D();
+        combined.setScale(scl);
+
+        // Create the main TransformGroup
+        tg = new TransformGroup(combined);
+        tg.addChild(createObject());
+    }
+
+    private Node createObject() {
+        // Use a bolder font to make it more visible from above
+        Font font2D = new Font("Arial", Font.BOLD, 1);
+        FontExtrusion extrusion = new FontExtrusion();
+        Font3D font3D = new Font3D(font2D, extrusion);
+
+        // Create the text and center it horizontally
+        Text3D text3D = new Text3D(font3D, str, pos);
+        text3D.setAlignment(Text3D.ALIGN_CENTER);
+
+        Appearance app = createAppearance(clr);
+        return new Shape3D(text3D, app);
+    }
+
+    private Appearance createAppearance(Color3f color) {
+        Appearance app = new Appearance();
+        Material mat = new Material();
+
+        // Key changes:
+        mat.setAmbientColor(new Color3f(0.2f, 0.2f, 0.2f)); // Reduced ambient
+        mat.setDiffuseColor(color);                         // Team color
+        mat.setSpecularColor(new Color3f(0.7f, 0.7f, 0.7f)); // Brighter specular
+        mat.setShininess(64.0f);
+        mat.setLightingEnable(true);
+
+        app.setMaterial(mat);
+        return app;
+    }
+
+    public TransformGroup getTransformGroup() {
+        return tg;
+    }
 }
