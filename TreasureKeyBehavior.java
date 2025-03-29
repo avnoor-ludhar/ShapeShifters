@@ -71,6 +71,11 @@ public class TreasureKeyBehavior extends Behavior {
     }
 
     private void checkTreasureInteraction() {
+        // Only allow blue player (playerId == 2) to activate the treasure.
+        if (playerId != 2) {
+            return;
+        }
+
         if (treasureGroup != null && treasureIsCoin) {
             Transform3D treasureTransform = new Transform3D();
             treasureGroup.getTransform(treasureTransform);
@@ -92,7 +97,8 @@ public class TreasureKeyBehavior extends Behavior {
         }
     }
 
-    private void startMorphAnimation() {
+
+    public void startMorphAnimation() {
         // 1. Get current position and remove old treasure
         Transform3D currentPosition = new Transform3D();
         treasureGroup.getTransform(currentPosition);
@@ -118,7 +124,7 @@ public class TreasureKeyBehavior extends Behavior {
                 new Color3f(0.0f, 0.0f, 0.0f),    // Emissive color
                 new Color3f(1.0f, 0.84f, 0.0f),   // Diffuse color (gold)
                 new Color3f(1.0f, 1.0f, 1.0f),    // Specular color
-                64.0f);                           // Shininess
+                64.0f);                         // Shininess
 
         // Enable lighting and make material fully opaque
         goldMaterial.setLightingEnable(true);
@@ -156,11 +162,9 @@ public class TreasureKeyBehavior extends Behavior {
         // Create behavior to update weights based on alpha
         Behavior morphBehavior = new Behavior() {
             private WakeupOnElapsedFrames wakeupFrame = new WakeupOnElapsedFrames(0);
-
             public void initialize() {
                 wakeupOn(wakeupFrame);
             }
-
             public void processStimulus(Iterator<WakeupCriterion> criteria) {
                 if (morphAlpha != null && morph != null) {
                     float alphaValue = morphAlpha.value();
@@ -201,6 +205,7 @@ public class TreasureKeyBehavior extends Behavior {
         this.treasureGroup = newTreasureTG;
         rootBG.addChild(newTreasureBG);
     }
+
     // Updated Geometry Creation Methods
     private GeometryArray createCoinGeometry() {
         int points = 5;

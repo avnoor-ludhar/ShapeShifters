@@ -19,12 +19,11 @@ import org.jogamp.java3d.loaders.objectfile.ObjectFile;
 import org.jogamp.java3d.utils.geometry.Box;
 import org.jogamp.java3d.utils.geometry.Primitive;
 import org.jogamp.java3d.utils.geometry.Cylinder;
-import org.jogamp.java3d.utils.geometry.Cylinder;
 import org.jogamp.java3d.utils.image.TextureLoader;
+import org.jogamp.java3d.utils.picking.PickResult;
 import org.jogamp.java3d.utils.picking.PickTool;
 import org.jogamp.java3d.utils.universe.SimpleUniverse;
 import org.jogamp.vecmath.*;
-import org.jogamp.java3d.utils.picking.PickTool;
 
 public class BasicScene extends JPanel implements MouseListener {
     private static final long serialVersionUID = 1L;
@@ -112,6 +111,8 @@ public class BasicScene extends JPanel implements MouseListener {
 
     // Add these field declarations to the class
     private MazeSign mazeSign; // Renamed to be more generic since we only have one sign
+
+    private static boolean gameEnded = false;
 
     // --- Constructors ---
     public BasicScene() {
@@ -217,6 +218,31 @@ public class BasicScene extends JPanel implements MouseListener {
 //                        System.out.println("HELASDCASDCASD");
                         updateAppearance(blueGhost.getTransformGroup(), blueGhostCycle.originalAppearance);
                     }
+                    // Check if the message is a kill event.
+                    if (line.startsWith("KILL")) {
+                        // (Existing kill event handling code...)
+                        String[] tokens = line.split(" ");
+                        if (tokens.length >= 2) {
+                            int killedPlayerId = Integer.parseInt(tokens[1]);
+                            // Reset positions, update camera, etc.
+                            if (killedPlayerId == 1 && blueGhost != null) {
+                                blueBoxPos.set(0.0, 0.1, 0.0);
+                                blueGhost.updatePositionAndRotation(0.0, 0.0, GhostModel.DIRECTION_DOWN);
+                                updateCamera();
+                            }
+                            System.out.println("Received kill event for player " + killedPlayerId + " and reset to center");
+                        }
+                        continue;
+                    }
+                    // New: Handle treasure morph broadcast
+                    if (line.startsWith("TREASURE_MORPH")) {
+                        if (treasureKeyBehavior != null) {
+                            treasureKeyBehavior.startMorphAnimation();
+                            System.out.println("TREASURE_MORPH activated.");
+                        }
+                        continue;
+                    }
+                    // Handle NPC update messages.
                     if (line.startsWith("NPC_UPDATE")) {
                         String[] tokens = line.split(" ");
                         for (int i = 1; i < tokens.length; i += 4) {
@@ -231,6 +257,7 @@ public class BasicScene extends JPanel implements MouseListener {
                         }
                         continue;
                     }
+                    // Process regular player position updates.
                     String[] tokens = line.split(" ");
                     if (tokens.length < 4)
                         continue;
@@ -238,12 +265,10 @@ public class BasicScene extends JPanel implements MouseListener {
                     double x = Double.parseDouble(tokens[1]);
                     double y = Double.parseDouble(tokens[2]);
                     double z = Double.parseDouble(tokens[3]);
-
                     int direction = GhostModel.DIRECTION_DOWN;
                     if (tokens.length >= 5) {
                         direction = Integer.parseInt(tokens[4]);
                     }
-
                     if (id == 1 && redGhost != null) {
                         redBoxPos.x = x;
                         redBoxPos.z = z;
@@ -268,6 +293,8 @@ public class BasicScene extends JPanel implements MouseListener {
                 e.printStackTrace();
             }
         }).start();
+
+
     }
 
     // --- Scene Creation ---
@@ -526,6 +553,10 @@ public class BasicScene extends JPanel implements MouseListener {
 
     }
 
+    public static void setGameEnded(boolean ended) {
+        gameEnded = ended;
+    }
+
     private TransformGroup createSpinner(long durationMillis, char axis) {
         TransformGroup spinner = new TransformGroup();
         spinner.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
@@ -580,6 +611,8 @@ public class BasicScene extends JPanel implements MouseListener {
         return null;
     }
 
+
+
     private void createSpotlight(BranchGroup sceneBG) {
         spotlightTG = new TransformGroup();
         spotlightTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
@@ -612,10 +645,25 @@ public class BasicScene extends JPanel implements MouseListener {
             @Override
             public void keyPressed(KeyEvent e) {
                 switch (e.getKeyChar()) {
-                    case 'w': upPressed = true; break;
-                    case 's': downPressed = true; break;
-                    case 'a': leftPressed = true; break;
-                    case 'd': rightPressed = true; break;
+                    case 'w':
+                        upPressed = true;
+                        break;
+                    case 's':
+                        downPressed = true;
+                        break;
+                    case 'a':
+                        leftPressed = true;
+                        break;
+                    case 'd':
+                        rightPressed = true;
+                        break;
+                    case 'e':
+                        // Only allow the blue player (playerId == 2) to activate the treasure.
+                        if (playerId == 2) {
+                            out.println("TREASURE_ACTIVATE");
+                            System.out.println("TREASURE_ACTIVATE sent by blue player.");
+                        }
+                        break;
                     default:
                         break;
                 }
@@ -623,15 +671,24 @@ public class BasicScene extends JPanel implements MouseListener {
             @Override
             public void keyReleased(KeyEvent e) {
                 switch (e.getKeyChar()) {
-                    case 'w': upPressed = false; break;
-                    case 's': downPressed = false; break;
-                    case 'a': leftPressed = false; break;
-                    case 'd': rightPressed = false; break;
+                    case 'w':
+                        upPressed = false;
+                        break;
+                    case 's':
+                        downPressed = false;
+                        break;
+                    case 'a':
+                        leftPressed = false;
+                        break;
+                    case 'd':
+                        rightPressed = false;
+                        break;
                     default:
                         break;
                 }
             }
         });
+
 
         canvas.setFocusable(true);
         canvas.requestFocusInWindow();
@@ -657,6 +714,17 @@ public class BasicScene extends JPanel implements MouseListener {
         universe.addBranchGraph(sceneBG);
         setLayout(new BorderLayout());
         add("Center", canvas);
+
+//        // In setupUniverse method:
+//        javax.swing.Timer endTimer = new javax.swing.Timer(2000, new ActionListener() {
+//            @Override
+//            public void actionPerformed(ActionEvent e) {
+//                GameEndAnimation gameEnd = new GameEndAnimation(universe, rootBG);
+//                gameEnd.triggerGameEnd("Blue");
+//            }
+//        });
+//        endTimer.setRepeats(false); // Ensure the timer only fires once
+//        endTimer.start();
     }
 
     private void updateMovement() {
@@ -774,6 +842,8 @@ public class BasicScene extends JPanel implements MouseListener {
     }
 
     private void updateCamera() {
+        if(gameEnded) return;
+
         Vector3d localPos = (playerId == 1) ? redBoxPos : blueBoxPos;
         Point3d eye = new Point3d(localPos.x, localPos.y + 0.6, localPos.z + 0.5);
         Point3d center = new Point3d(localPos.x, localPos.y, localPos.z);
@@ -791,6 +861,14 @@ public class BasicScene extends JPanel implements MouseListener {
         spotlightTransform.setTranslation(spotlightPos);
         spotlightTG.setTransform(spotlightTransform);
     }
+
+    public void sendKillEvent() {
+        double posX = (playerId == 1) ? redBoxPos.x : blueBoxPos.x;
+        double posZ = (playerId == 1) ? redBoxPos.z : blueBoxPos.z;
+        out.println("KILL " + playerId + " " + posX + " " + 0.1 + " " + posZ);
+        System.out.println("Kill event sent for player " + playerId);
+    }
+
 
     private boolean collidesWithWall(double x, double z) {
         double half = GhostModel.getCharacterHalf();
@@ -928,11 +1006,13 @@ public class BasicScene extends JPanel implements MouseListener {
     public void mousePressed(MouseEvent e){}
     public void mouseReleased(MouseEvent e) {}
     public void mouseEntered(MouseEvent e) {}
+    @Override
     //either:
     //RED clicks on player
     //or
     //BLUE clicks on NPC
     public void mouseClicked(MouseEvent e) {
+        // Compute the pick ray from the click coordinates.
         Point3d pixelPos = new Point3d();
         Point3d eyePos = new Point3d();
         canvas.getPixelLocationInImagePlate(e.getX(), e.getY(), pixelPos);
@@ -963,6 +1043,7 @@ public class BasicScene extends JPanel implements MouseListener {
                 blueBoxPos.z = p.getY();
                 out.println(2 + " " + p.getX() + " " + 0.1 + " " + p.getY() + " " + GhostModel.DIRECTION_DOWN);
                 blueGhost.updatePositionAndRotation(p.getX(), p.getY(), GhostModel.DIRECTION_DOWN);
+                sendKillEvent();
             }
         }
 
@@ -976,6 +1057,7 @@ public class BasicScene extends JPanel implements MouseListener {
 
         return;
     }
+
 
     private BranchGroup createTreasure(double x, double y, double z) {
         if (treasureAppearance == null) {

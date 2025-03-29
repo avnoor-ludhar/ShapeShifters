@@ -23,10 +23,10 @@ public class BasicServer {
     private static String treasureMsg;
 
     public static void main(String[] args) {
-        // Print the server's IP address.
+        // Print the server's IP address (hard-coded for testing)
         try {
             InetAddress localHost = InetAddress.getLocalHost();
-            String serverIP = "10.72.31.248";
+            String serverIP = "10.72.47.254";
             System.out.println("Server IP address: " + serverIP);
         } catch (UnknownHostException e) {
             e.printStackTrace();
@@ -107,12 +107,12 @@ public class BasicServer {
             npcs.add(npc);
         }
 
-        // Update NPC positions periodically and broadcast their states.
+        // Periodically update NPC positions and broadcast their states.
         new Thread(() -> {
             while (true) {
                 for (NPC npc : npcs) {
                     npc.update((x, z) -> {
-                        double half = 0.03; // half-size for collision detection
+                        double half = 0.03;
                         double side = 2 * half;
                         Rectangle2D.Double npcRect = new Rectangle2D.Double(x - half, z - half, side, side);
                         for (int i = 0; i < MAZE_HEIGHT; i++) {
@@ -207,8 +207,7 @@ public class BasicServer {
                     Vector3d pos = npc.getPosition();
                     out.println("NPC_INIT " + pos.x + " " + pos.z + " 0 0");
                 }
-
-                // Send treasure coordinates.
+                // Send treasure information.
                 out.println(treasureMsg);
             } catch (IOException e) {
                 e.printStackTrace();
@@ -224,13 +223,27 @@ public class BasicServer {
             String line;
             try {
                 while ((line = in.readLine()) != null) {
-                    // Handle incoming messages (player position updates, etc.)
-                    // For simplicity, broadcast the message to all clients.
+                    // New: Handle treasure activation message
+                    if (line.startsWith("TREASURE_ACTIVATE")) {
+                        // When a client activates the treasure, broadcast a morph message to all clients.
+                        broadcast("TREASURE_MORPH", this);
+                        continue;
+                    }
+                    // If the message is a kill event, broadcast it and skip further processing.
+                    if (line.startsWith("KILL")) {
+                        broadcast(line, this);
+                        continue;
+                    }
+                    // Process regular player position updates.
+                    String[] tokens = line.split(" ");
+                    if (tokens.length < 4)
+                        continue;
                     broadcast(line, this);
                 }
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
+
     }
 }
