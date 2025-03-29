@@ -110,6 +110,8 @@ public class BasicScene extends JPanel implements MouseListener {
     // Add these field declarations to the class
     private MazeSign mazeSign; // Renamed to be more generic since we only have one sign
 
+    private static boolean gameEnded = false;
+
     // --- Constructors ---
     public BasicScene() {
         this("localhost", "Player");
@@ -491,6 +493,10 @@ public class BasicScene extends JPanel implements MouseListener {
         return sceneBG;
     }
 
+    public static void setGameEnded(boolean ended) {
+        gameEnded = ended;
+    }
+
     private TransformGroup createSpinner(long durationMillis, char axis) {
         TransformGroup spinner = new TransformGroup();
         spinner.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
@@ -641,6 +647,17 @@ public class BasicScene extends JPanel implements MouseListener {
         universe.addBranchGraph(sceneBG);
         setLayout(new BorderLayout());
         add("Center", canvas);
+
+//        // In setupUniverse method:
+//        javax.swing.Timer endTimer = new javax.swing.Timer(2000, new ActionListener() {
+//            @Override
+//            public void actionPerformed(ActionEvent e) {
+//                GameEndAnimation gameEnd = new GameEndAnimation(universe, rootBG);
+//                gameEnd.triggerGameEnd("Blue");
+//            }
+//        });
+//        endTimer.setRepeats(false); // Ensure the timer only fires once
+//        endTimer.start();
     }
 
     private void updateMovement() {
@@ -753,6 +770,8 @@ public class BasicScene extends JPanel implements MouseListener {
     }
 
     private void updateCamera() {
+        if(gameEnded) return;
+
         Vector3d localPos = (playerId == 1) ? redBoxPos : blueBoxPos;
         Point3d eye = new Point3d(localPos.x, localPos.y + 0.6, localPos.z + 0.5);
         Point3d center = new Point3d(localPos.x, localPos.y, localPos.z);
