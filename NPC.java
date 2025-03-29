@@ -21,11 +21,10 @@ public class NPC {
     
     private Vector3d position;
     private Vector3d direction;
-    private double step;
+    double step;
 
-    /**
-     * Interface for collision detection.
-     */
+    private GhostModel userGhost;
+
     public interface CollisionChecker {
         boolean collides(double x, double z);
     }
@@ -52,10 +51,7 @@ public class NPC {
         // Apply initial rotation based on direction
         updateRotation();
     }
-    
-    /**
-     * Load the ghost model and apply green appearance
-     */
+
     private void loadGhostModel() {
         try {
             // Create ObjectFile loader
@@ -106,10 +102,7 @@ public class NPC {
             rotationTG.addChild(npcBox);
         }
     }
-    
-    /**
-     * Apply appearance to all shapes in the model
-     */
+
     private void applyAppearanceToModel(Node node, Appearance appearance) {
         if (node instanceof Shape3D) {
             Shape3D shape = (Shape3D) node;
@@ -121,11 +114,8 @@ public class NPC {
             }
         }
     }
-    
-    /**
-     * Update rotation based on current direction
-     */
-    private void updateRotation() {
+
+    public void updateRotation() {
         Transform3D rotTransform = new Transform3D();
         
         // Determine rotation based on primary movement direction
@@ -161,6 +151,22 @@ public class NPC {
         return new Vector3d(position);
     }
 
+    public void bounce() {
+        // Reverse the direction vector
+        direction.scale(-1);
+        // Push back further than one step to prevent sticking
+        position.x += direction.x * step * 2;
+        position.z += direction.z * step * 2;
+        updateRotation();
+        Transform3D posTransform = new Transform3D();
+        posTransform.setTranslation(position);
+        positionTG.setTransform(posTransform);
+    }
+
+    public void setPosition(Vector3d newPos) {
+        this.position = new Vector3d(newPos);
+    }
+
     public TransformGroup getTransformGroup() {
         return positionTG; // Return the root transform group
     }
@@ -169,15 +175,22 @@ public class NPC {
         return CHARACTER_HALF;
     }
 
-    /**
-     * Update the NPC's position. Change direction if a collision occurs.
-     */
-    public void update(CollisionChecker checker) {
+    public void setDirection(Vector3d newDir) {
+        this.direction.set(newDir);
+        this.direction.normalize(); // Ensure consistent movement speed
+        updateRotation();
+    }
+
+    public double getStep() {
+        return this.step;
+    }
+
+    public void update(CollisionChecker checker, GhostModel userGhost) {
         // Calculate new position based on current direction
         double newX = position.x + direction.x * step;
         double newZ = position.z + direction.z * step;
 
-        if (checker.collides(newX, newZ)) {
+        if (checker.collides(newX, newZ) || CollisionDetector.collidesWithUser(newX, newZ, NPC.getCharacterHalf(), userGhost)) {
             // Try changing direction up to 4 times
             Vector3d oldDirection = new Vector3d(direction);
             boolean directionChanged = false;
