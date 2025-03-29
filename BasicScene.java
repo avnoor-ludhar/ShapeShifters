@@ -14,7 +14,10 @@ import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.Timer;
 import org.jogamp.java3d.*;
+import org.jogamp.java3d.loaders.Scene;
+import org.jogamp.java3d.loaders.objectfile.ObjectFile;
 import org.jogamp.java3d.utils.geometry.Box;
+import org.jogamp.java3d.utils.geometry.Cylinder;
 import org.jogamp.java3d.utils.image.TextureLoader;
 import org.jogamp.java3d.utils.picking.PickTool;
 import org.jogamp.java3d.utils.universe.SimpleUniverse;
@@ -247,7 +250,7 @@ public class BasicScene extends JPanel implements MouseListener {
                 new Color3f(1.0f, 1.0f, 1.0f),  // Specular color
                 64.0f));  // Shininess
 
-        String floorTexturePath = "src/Shapeshifters/Textures/QuartzFloorTexture.jpg";
+        String floorTexturePath = "src/ShapeShifters/Textures/QuartzFloorTexture.jpg";
         try {
             URL floorTextureURL = new File(floorTexturePath).toURI().toURL();
             Texture floorTexture = new TextureLoader(floorTextureURL, "RGB", new java.awt.Container()).getTexture();
@@ -277,7 +280,7 @@ public class BasicScene extends JPanel implements MouseListener {
         // Create maze walls.
         Appearance wallAppearance = new Appearance();
         // Load wall texture.
-        String wallTexturePath = "src/Shapeshifters/Textures/WhiteWallTexture.jpg";
+        String wallTexturePath = "src/ShapeShifters/Textures/WhiteWallTexture.jpg";
         try {
             URL wallTextureURL = new File(wallTexturePath).toURI().toURL();
             Texture wallTexture = new TextureLoader(wallTextureURL, "RGB", new java.awt.Container()).getTexture();
@@ -352,8 +355,109 @@ public class BasicScene extends JPanel implements MouseListener {
         pickTool = new PickTool(blueGhostBranch);                 // initialize 'pickTool' and allow 'cubeBG' pickable
         pickTool.setMode(PickTool.BOUNDS);
 
+        Cylinder base = new Cylinder(0.1f, .2f);
+        Transform3D baseTransform = new Transform3D();
+        baseTransform.setTranslation(new Vector3f(.3f, 0.1f, .3f)); // upright
+        baseTransform.setScale(.6f);
+        TransformGroup baseTG = new TransformGroup();
+        baseTG.setTransform(baseTransform);
+        baseTG.addChild(base);
+        sceneBG.addChild(baseTG);
+
+        // Middle horizontal rectangle (Box)
+        Box middleBox = new Box(0.3f, 0.005f, 0.02f, null); // thin flat rectangle
+        TransformGroup spinMiddleTG = createSpinner(2000, 'x'); // spins once/sec
+
+        Transform3D midBoxTrans = new Transform3D();
+        midBoxTrans.setTranslation(new Vector3f(0f, 0.09f, 0f));
+        TransformGroup midBoxTG = new TransformGroup(midBoxTrans);
+        midBoxTG.addChild(middleBox);
+        spinMiddleTG.addChild(midBoxTG);
+        baseTG.addChild(spinMiddleTG);
+
+        // Ends of the middle box (small boxes spinning fast)
+        float offset = 0.3f; // match middleBox width
+
+
+
+        ObjectFile f = new ObjectFile(ObjectFile.RESIZE, (float) (60 * Math.PI / 180.0));
+        Scene s1 = null;
+        Scene s2 = null;
+        try {
+            s1 = f.load("FanBlades.obj");
+            s2 = f.load("FanBlades.obj");
+        } catch (Exception e) {}
+        if (s1 == null || s2 == null) {
+            System.exit(1); //this won't happen dw
+        }
+        BranchGroup b1 = s1.getSceneGroup();
+        BranchGroup b2 = s2.getSceneGroup();
+
+        TransformGroup tg1 = new TransformGroup();
+        tg1.addChild(b1);
+        Transform3D transform1 = new Transform3D();
+        transform1.rotY(Math.PI/2);
+        transform1.setScale(.1);
+        tg1.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
+        tg1.setTransform(transform1);
+
+        TransformGroup tg2 = new TransformGroup();
+        tg2.addChild(b2);
+        Transform3D transform2 = new Transform3D();
+        transform2.rotY(Math.PI/2);
+        transform2.setScale(.1);
+        tg2.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
+        tg2.setTransform(transform2);
+
+
+//        Box endBoxLeft = new Box(0.005f, 0.01f, 0.05f, null);
+        TransformGroup spinLeft = createSpinner(200, 'z'); // faster spin
+
+        Transform3D leftTrans = new Transform3D();
+        leftTrans.setTranslation(new Vector3f(-offset, 0f, 0f));
+        TransformGroup leftTG = new TransformGroup(leftTrans);
+        leftTG.addChild(tg1);
+        spinLeft.addChild(leftTG);
+        midBoxTG.addChild(spinLeft); // attach to midBoxTG so it spins with it
+
+
+
+
+//        Box endBoxRight = new Box(0.01f, 0.01f, 0.05f, null);
+        TransformGroup spinRight = createSpinner(200, 'z');
+
+        Transform3D rightTrans = new Transform3D();
+        rightTrans.setTranslation(new Vector3f(offset, 0f, 0f));
+        TransformGroup rightTG = new TransformGroup(rightTrans);
+        rightTG.addChild(tg2);
+        spinRight.addChild(rightTG);
+        midBoxTG.addChild(spinRight);
+
+
         sceneBG.compile();
         return sceneBG;
+    }
+
+    private TransformGroup createSpinner(long durationMillis, char axis) {
+        TransformGroup spinner = new TransformGroup();
+        spinner.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
+
+        Alpha spinAlpha = new Alpha(-1, durationMillis);
+
+        Transform3D rotationAxis = new Transform3D();
+        switch (axis) {
+            case 'x':
+//                rotationAxis.rotX(Math.PI / 2); break;
+                break; //rotating around x by default
+            case 'z':
+                rotationAxis.rotZ(Math.PI / 2); break;
+            // default is Y-axis (identity)
+        }
+
+        RotationInterpolator rotator = new RotationInterpolator(spinAlpha, spinner, rotationAxis, 0f, (float)Math.PI * 2);
+        rotator.setSchedulingBounds(new BoundingSphere());
+        spinner.addChild(rotator);
+        return spinner;
     }
 
     // Helper method to add a wall and record its collision bounds.
@@ -612,7 +716,7 @@ public class BasicScene extends JPanel implements MouseListener {
     // Play footstep sound effect.
     private void playFootstepSound() {
         try {
-            File soundFile = new File("src/Shapeshifters/sounds/footsteps.wav");
+            File soundFile = new File("src/ShapeShifters/sounds/footsteps.wav");
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
             javax.sound.sampled.Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
@@ -625,7 +729,7 @@ public class BasicScene extends JPanel implements MouseListener {
     // Play wall collision sound effect.
     private void playWallCollisionSound() {
         try {
-            File soundFile = new File("src/Shapeshifters/sounds/wallCollide.wav");
+            File soundFile = new File("src/ShapeShifters/sounds/wallCollide.wav");
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
             javax.sound.sampled.Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
