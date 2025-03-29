@@ -36,10 +36,12 @@ public class BasicScene extends JPanel implements MouseListener {
     private Canvas3D canvas;
     private PickTool redPickTool;
     private PickTool bluePickTool;
+    private AppearanceCycleBehavior blueGhostCycle;
     // Player positions (x, y, z) – y remains constant at 0.1.
     private Vector3d redBoxPos = new Vector3d(0.0, 0.1, 0.0);
     private Vector3d blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
     private final double STEP = 0.010;
+
 
     // Maze collision data
     private HashMap<Rectangle2D.Double, Point> wallBounds = new HashMap<>();
@@ -116,7 +118,19 @@ public class BasicScene extends JPanel implements MouseListener {
         this("localhost", "Player");
     }
 
+    private void updateAppearance(Node node, Appearance app) {
+        if (node instanceof Shape3D) {
+//            ((Shape3D)node).setCapability(Shape3D.ALLOW_APPEARANCE_WRITE);
+            ((Shape3D) node).setAppearance(app);
+        } else if (node instanceof Group) {
+            Group group = (Group) node;
+            for (int i = 0; i < group.numChildren(); i++) {
+                updateAppearance(group.getChild(i), app);
+            }
+        }
+    }
     public BasicScene(String ipAddress, String username) {
+
         this.ipAddress = ipAddress;
         this.username = username;
         try {
@@ -129,7 +143,6 @@ public class BasicScene extends JPanel implements MouseListener {
                 playerId = Integer.parseInt(idLine.substring(3).trim());
                 System.out.println("Assigned player ID: " + playerId);
             }
-
             String mazeStr = in.readLine();
             int index = 0;
             if (mazeStr != null) {
@@ -196,6 +209,14 @@ public class BasicScene extends JPanel implements MouseListener {
             String line;
             try {
                 while ((line = in.readLine()) != null) {
+                    if (line != null && line.startsWith("GREEN")) {
+//                        System.out.println("HELLO WROLD");
+                        updateAppearance(blueGhost.getTransformGroup(), blueGhostCycle.newAppearance);
+                    }
+                    if (line != null && line.startsWith("BLUE")) {
+//                        System.out.println("HELASDCASDCASD");
+                        updateAppearance(blueGhost.getTransformGroup(), blueGhostCycle.originalAppearance);
+                    }
                     if (line.startsWith("NPC_UPDATE")) {
                         String[] tokens = line.split(" ");
                         for (int i = 1; i < tokens.length; i += 4) {
@@ -224,9 +245,23 @@ public class BasicScene extends JPanel implements MouseListener {
                     }
 
                     if (id == 1 && redGhost != null) {
+                        redBoxPos.x = x;
+                        redBoxPos.z = z;
                         redGhost.updatePositionAndRotation(x, z, direction);
+
+                        if (this.universe != null) {
+                            updateCamera();
+                            updateSpotlight();
+
+                        }
                     } else if (id == 2 && blueGhost != null) {
+                        blueBoxPos.x = x;
+                        blueBoxPos.z = z;
                         blueGhost.updatePositionAndRotation(x, z, direction);
+                        if (this.universe != null) {
+                            updateCamera();
+                            updateSpotlight();
+                        }
                     }
                 }
             } catch (IOException e) {
@@ -277,6 +312,17 @@ public class BasicScene extends JPanel implements MouseListener {
 
         // Add four corner signs
         createMazeSigns(sceneBG);
+        if (playerId == 1) {
+            Point2f redPosn = getUnfilledPosn();
+            redBoxPos.x = redPosn.getX();
+            redBoxPos.z = redPosn.getY(); //second one is z, ignore the "Y"
+            out.println(playerId + " " + redBoxPos.x + " " + 0.1 + " " + redBoxPos.z + " " + GhostModel.DIRECTION_DOWN);
+        } else {
+            Point2f bluePosn = getUnfilledPosn();
+            blueBoxPos.x = bluePosn.getX();
+            blueBoxPos.z = bluePosn.getY();
+            out.println(playerId + " " + blueBoxPos.x + " " + 0.1 + " " + blueBoxPos.x + " " + GhostModel.DIRECTION_DOWN);
+        }
 
         redGhost = new GhostModel(true, redBoxPos);
         blueGhost = new GhostModel(false, blueBoxPos);
@@ -310,11 +356,7 @@ public class BasicScene extends JPanel implements MouseListener {
         directionalLight.setInfluencingBounds(bounds);
         sceneBG.addChild(directionalLight);
 
-        for (int i = 5; i < 15; i++) {
-            for (int j = 5; j < 15; j++) {
-                walls[i][j] = 0;
-            }
-        }
+
         for (int i = 0; i < MAZE_HEIGHT; i++) {
             for (int j = 0; j < MAZE_WIDTH; j++) {
                 if (walls[i][j] == 1) {
@@ -344,8 +386,8 @@ public class BasicScene extends JPanel implements MouseListener {
             npcBG.addChild(npc.getTransformGroup());
         }
       
-        for (int i = 11; i < 14; i++) {
-            for (int j = 11; j < 14; j++) {
+        for (int i = 9; i < 12; i++) {
+            for (int j = 9; j < 12; j++) {
                 addWall(sceneBG,
                         -1 + i * 0.103f, 0.1f, -1 + j * 0.103f,
                         0.055f, 0.05f, 0.055f,
@@ -382,7 +424,7 @@ public class BasicScene extends JPanel implements MouseListener {
 
         Cylinder base = new Cylinder(0.1f, .2f);
         Transform3D baseTransform = new Transform3D();
-        baseTransform.setTranslation(new Vector3f(.23f, 0.1f, .23f)); // upright
+        baseTransform.setTranslation(new Vector3f(.03f, 0.1f, .03f)); // upright
         baseTransform.setScale(.45f);
         TransformGroup baseTG = new TransformGroup();
         baseTG.setTransform(baseTransform);
@@ -464,6 +506,24 @@ public class BasicScene extends JPanel implements MouseListener {
 
         sceneBG.compile();
         return sceneBG;
+    }
+
+    private Point2f getUnfilledPosn() {
+        Random rand = new Random();
+        float x;
+        float z;
+        while (true) {
+            int randX = rand.nextInt(18) + 1;
+            int randY = rand.nextInt(18) + 1;
+            //empty posn not filled by the spinny thingamajig
+            if ((walls[randX][randY] == 0) && !(9 <= randX && randX < 12 && 9 <= randY && randY < 12)) {
+                x = -1 + randX * 0.103f;
+                z = -1 + randY * 0.103f;
+                break;
+            }
+        }
+        return new Point2f(x, z);
+
     }
 
     private TransformGroup createSpinner(long durationMillis, char axis) {
@@ -576,6 +636,13 @@ public class BasicScene extends JPanel implements MouseListener {
         canvas.setFocusable(true);
         canvas.requestFocusInWindow();
 
+
+        blueGhostCycle = new AppearanceCycleBehavior(blueGhost.getTransformGroup(), blueGhost, out);
+        blueGhostCycle.setSchedulingBounds(new BoundingSphere(new Point3d(0,0,0), 100.0));
+        BranchGroup behaviorBG = new BranchGroup();
+        behaviorBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
+        behaviorBG.addChild(blueGhostCycle);
+        sceneBG.addChild(behaviorBG);
         Timer movementTimer = new Timer(16, new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -619,29 +686,34 @@ public class BasicScene extends JPanel implements MouseListener {
             newX = oldX;
             newZ = oldZ;
             direction = -1; // Track which direction we're moving
-
+            double step;
+            if (playerId == 1) {
+                step = redGhost.step;
+            } else {
+                step = blueGhost.step;
+            }
             if (upPressed && changeZ) {
-                dz -= STEP;
+                dz -= step;
                 direction = GhostModel.DIRECTION_UP;
             }
             if (downPressed && changeZ) {
-                dz += STEP;
+                dz += step;
                 direction = GhostModel.DIRECTION_DOWN;
             }
             if (leftPressed && changeX) {
-                dx -= STEP;
+                dx -= step;
                 direction = GhostModel.DIRECTION_LEFT;
             }
             if (rightPressed && changeX) {
-                dx += STEP;
+                dx += step;
                 direction = GhostModel.DIRECTION_RIGHT;
             }
 
             // Normalize diagonal movement to keep speed consistent.
             if (dx != 0 || dz != 0) {
                 double length = Math.sqrt(dx * dx + dz * dz);
-                dx = dx / length * STEP;
-                dz = dz / length * STEP;
+                dx = dx / length * step;
+                dz = dz / length * step;
 
                 // For diagonal movement, prioritize the last key pressed
                 // If multiple keys are pressed simultaneously, we'll use the horizontal direction
@@ -879,9 +951,18 @@ public class BasicScene extends JPanel implements MouseListener {
 //        System.out.println(redPickTool.pickClosest());
         if (redPickTool.pickClosest() != null) {
             double dist = Math.pow((Math.pow(redBoxPos.x - blueBoxPos.x, 2) + Math.pow(redBoxPos.z - blueBoxPos.z, 2)), .5);
+            System.out.println("THIS HAPPENS");
+            System.out.printf("%f\n %f %f\n%f %f\n", dist, blueBoxPos.x, blueBoxPos.z, redBoxPos.x, redBoxPos.z);
             if (dist < .5f && playerId == 1) {
-                blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
-                blueGhost.updatePositionAndRotation(blueBoxPos.x, blueBoxPos.z, GhostModel.DIRECTION_DOWN);
+                System.out.println("THIS DOESNT HAPPEN :(((((");
+                Point2f p = getUnfilledPosn();
+//                blueBoxPos.x = p.getX();
+//                blueBoxPos.z = p.getY();
+//                blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
+                blueBoxPos.x = p.getX();
+                blueBoxPos.z = p.getY();
+                out.println(2 + " " + p.getX() + " " + 0.1 + " " + p.getY() + " " + GhostModel.DIRECTION_DOWN);
+                blueGhost.updatePositionAndRotation(p.getX(), p.getY(), GhostModel.DIRECTION_DOWN);
             }
         }
 
@@ -889,34 +970,11 @@ public class BasicScene extends JPanel implements MouseListener {
 
         bluePickTool.setShapeRay(eyePos, rayDirection);
 //        System.out.println(redPickTool.pickClosest());
-        if (bluePickTool.pickClosest() != null) {
-            Appearance greenAppearance = new Appearance();
-            Color3f greenColor = new Color3f(0.0f, 1.0f, 0.0f); // Green for NPCs
-            Material material = new Material(
-                    greenColor,                     // Ambient color
-                    new Color3f(0.1f, 0.1f, 0.1f),  // Emissive color
-                    greenColor,                     // Diffuse color
-                    new Color3f(1.0f, 1.0f, 1.0f),  // Specular color
-                    64.0f                           // Shininess
-            );
-            greenAppearance.setMaterial(material);
-            updateAppearance(blueGhost.getTransformGroup(), greenAppearance);
-//            System.out.println("HELLO WORLD THIS HAPPENS");
+        if (bluePickTool.pickClosest() != null && playerId == 2) {
+            blueGhostCycle.triggerChange();
         }
 
         return;
-    }
-
-    private void updateAppearance(Node node, Appearance app) {
-        if (node instanceof Shape3D) {
-//            ((Shape3D)node).setCapability(Shape3D.ALLOW_APPEARANCE_WRITE);
-            ((Shape3D) node).setAppearance(app);
-        } else if (node instanceof Group) {
-            Group group = (Group) node;
-            for (int i = 0; i < group.numChildren(); i++) {
-                updateAppearance(group.getChild(i), app);
-            }
-        }
     }
 
     private BranchGroup createTreasure(double x, double y, double z) {

@@ -35,15 +35,20 @@ public class BasicServer {
         // Initialize maze and designate moving walls.
         maze = GenerateMaze.getMaze(20, 20);
         // Clear a central area of the maze.
-        for (int i = 7; i < 13; i++) {
-            for (int j = 7; j < 13; j++) {
+//        for (int i = 7; i < 13; i++) {
+//            for (int j = 7; j < 13; j++) {
+//                maze.get(i).set(j, 0);
+//            }
+//        }
+        for (int i = 9; i < 12; i++) {
+            for (int j = 9; j < 12; j++) {
                 maze.get(i).set(j, 0);
             }
         }
         // Randomly remove 10% of walls.
         for (int i = 1; i < MAZE_HEIGHT - 1; i++) {
             for (int j = 1; j < MAZE_WIDTH - 1; j++) {
-                if (Math.random() < 0.1) {
+                if (Math.random() < 0.2) {
                     maze.get(i).set(j, 0);
                 }
             }
