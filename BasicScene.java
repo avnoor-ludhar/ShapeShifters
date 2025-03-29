@@ -648,16 +648,16 @@ public class BasicScene extends JPanel implements MouseListener {
         setLayout(new BorderLayout());
         add("Center", canvas);
 
-        // In setupUniverse method:
-        javax.swing.Timer endTimer = new javax.swing.Timer(2000, new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                GameEndAnimation gameEnd = new GameEndAnimation(universe, rootBG);
-                gameEnd.triggerGameEnd("Blue");
-            }
-        });
-        endTimer.setRepeats(false); // Ensure the timer only fires once
-        endTimer.start();
+//        // In setupUniverse method:
+//        javax.swing.Timer endTimer = new javax.swing.Timer(2000, new ActionListener() {
+//            @Override
+//            public void actionPerformed(ActionEvent e) {
+//                GameEndAnimation gameEnd = new GameEndAnimation(universe, rootBG);
+//                gameEnd.triggerGameEnd("Blue");
+//            }
+//        });
+//        endTimer.setRepeats(false); // Ensure the timer only fires once
+//        endTimer.start();
     }
 
     private void updateMovement() {
