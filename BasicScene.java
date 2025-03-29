@@ -20,6 +20,7 @@ import org.jogamp.java3d.utils.geometry.Box;
 import org.jogamp.java3d.utils.geometry.Primitive;
 import org.jogamp.java3d.utils.geometry.Cylinder;
 import org.jogamp.java3d.utils.image.TextureLoader;
+import org.jogamp.java3d.utils.picking.PickResult;
 import org.jogamp.java3d.utils.picking.PickTool;
 import org.jogamp.java3d.utils.universe.SimpleUniverse;
 import org.jogamp.vecmath.*;
@@ -32,7 +33,8 @@ public class BasicScene extends JPanel implements MouseListener {
     private GhostModel redGhost;
     private GhostModel blueGhost;
     private Canvas3D canvas;
-    private PickTool pickTool;
+    private PickTool redPickTool;
+    private PickTool bluePickTool;
     // Player positions (x, y, z) – y remains constant at 0.1.
     private Vector3d redBoxPos = new Vector3d(0.0, 0.1, 0.0);
     private Vector3d blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
@@ -195,6 +197,31 @@ public class BasicScene extends JPanel implements MouseListener {
             String line;
             try {
                 while ((line = in.readLine()) != null) {
+                    // Check if the message is a kill event.
+                    if (line.startsWith("KILL")) {
+                        // (Existing kill event handling code...)
+                        String[] tokens = line.split(" ");
+                        if (tokens.length >= 2) {
+                            int killedPlayerId = Integer.parseInt(tokens[1]);
+                            // Reset positions, update camera, etc.
+                            if (killedPlayerId == 1 && blueGhost != null) {
+                                blueBoxPos.set(0.0, 0.1, 0.0);
+                                blueGhost.updatePositionAndRotation(0.0, 0.0, GhostModel.DIRECTION_DOWN);
+                                updateCamera();
+                            }
+                            System.out.println("Received kill event for player " + killedPlayerId + " and reset to center");
+                        }
+                        continue;
+                    }
+                    // New: Handle treasure morph broadcast
+                    if (line.startsWith("TREASURE_MORPH")) {
+                        if (treasureKeyBehavior != null) {
+                            treasureKeyBehavior.startMorphAnimation();
+                            System.out.println("TREASURE_MORPH activated.");
+                        }
+                        continue;
+                    }
+                    // Handle NPC update messages.
                     if (line.startsWith("NPC_UPDATE")) {
                         String[] tokens = line.split(" ");
                         for (int i = 1; i < tokens.length; i += 4) {
@@ -209,6 +236,7 @@ public class BasicScene extends JPanel implements MouseListener {
                         }
                         continue;
                     }
+                    // Process regular player position updates.
                     String[] tokens = line.split(" ");
                     if (tokens.length < 4)
                         continue;
@@ -216,12 +244,10 @@ public class BasicScene extends JPanel implements MouseListener {
                     double x = Double.parseDouble(tokens[1]);
                     double y = Double.parseDouble(tokens[2]);
                     double z = Double.parseDouble(tokens[3]);
-
                     int direction = GhostModel.DIRECTION_DOWN;
                     if (tokens.length >= 5) {
                         direction = Integer.parseInt(tokens[4]);
                     }
-
                     if (id == 1 && redGhost != null) {
                         redGhost.updatePositionAndRotation(x, z, direction);
                     } else if (id == 2 && blueGhost != null) {
@@ -232,6 +258,8 @@ public class BasicScene extends JPanel implements MouseListener {
                 e.printStackTrace();
             }
         }).start();
+
+
     }
 
     // --- Scene Creation ---
@@ -253,7 +281,7 @@ public class BasicScene extends JPanel implements MouseListener {
                 new Color3f(1.0f, 1.0f, 1.0f),  // Specular color
                 64.0f));  // Shininess
 
-        String floorTexturePath = "src/Shapeshifters/Textures/QuartzFloorTexture.jpg";
+        String floorTexturePath = "src/ShapeShifters/Textures/QuartzFloorTexture.jpg";
         try {
             URL floorTextureURL = new File(floorTexturePath).toURI().toURL();
             Texture floorTexture = new TextureLoader(floorTextureURL, "RGB", new java.awt.Container()).getTexture();
@@ -320,7 +348,7 @@ public class BasicScene extends JPanel implements MouseListener {
                     TransformGroup tg = addWall(sceneBG,
                             -1 + i * 0.103f, 0.1f, -1 + j * 0.103f,
                             0.055f, 0.05f, 0.055f,
-                            wallAppearance, i, j);
+                            wallAppearance, i, j, true);
                     if (movingWalls.contains(new Point(i, j))) {
                         tg.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
                         tg.setCapability(TransformGroup.ALLOW_TRANSFORM_READ);
@@ -336,9 +364,26 @@ public class BasicScene extends JPanel implements MouseListener {
             }
         }
 
-        for (NPC npc : npcs) {
-            sceneBG.addChild(npc.getTransformGroup());
+
+        BranchGroup npcBG = new BranchGroup();
+        npcBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
+        for (NPC npc: npcs) {
+            npcBG.addChild(npc.getTransformGroup());
         }
+      
+        for (int i = 11; i < 14; i++) {
+            for (int j = 11; j < 14; j++) {
+                addWall(sceneBG,
+                        -1 + i * 0.103f, 0.1f, -1 + j * 0.103f,
+                        0.055f, 0.05f, 0.055f,
+                        wallAppearance, i, j, false);
+            }
+        }
+
+        bluePickTool = new PickTool(npcBG);
+        bluePickTool.setMode(PickTool.BOUNDS);
+        sceneBG.addChild(npcBG);
+
 
 
         if (treasureBranchGroup != null) {
@@ -357,13 +402,15 @@ public class BasicScene extends JPanel implements MouseListener {
         blueGhostBranch.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
         blueGhostBranch.addChild(blueGhostTransform);
         sceneBG.addChild(blueGhostBranch);
-        pickTool = new PickTool(blueGhostBranch);                 // initialize 'pickTool' and allow 'cubeBG' pickable
-        pickTool.setMode(PickTool.BOUNDS);
+        redPickTool = new PickTool(blueGhostBranch);                 // initialize 'redPickTool' and allow 'cubeBG' pickable
+        redPickTool.setMode(PickTool.BOUNDS);
+
+
 
         Cylinder base = new Cylinder(0.1f, .2f);
         Transform3D baseTransform = new Transform3D();
-        baseTransform.setTranslation(new Vector3f(.3f, 0.1f, .3f)); // upright
-        baseTransform.setScale(.6f);
+        baseTransform.setTranslation(new Vector3f(.23f, 0.1f, .23f)); // upright
+        baseTransform.setScale(.45f);
         TransformGroup baseTG = new TransformGroup();
         baseTG.setTransform(baseTransform);
         baseTG.addChild(base);
@@ -474,15 +521,26 @@ public class BasicScene extends JPanel implements MouseListener {
 
     private TransformGroup addWall(BranchGroup sceneBG, double x, double y, double z,
                                    double width, double height, double depth,
-                                   Appearance appearance, int i, int j) {
-        Transform3D transform = new Transform3D();
-        transform.setTranslation(new Vector3d(x, y, z));
-        TransformGroup tg = new TransformGroup(transform);
-        TransformGroup container = new TransformGroup();
-        container.addChild(tg);
-        Box wall = new Box((float) width, (float) height, (float) depth,
-                Box.GENERATE_NORMALS | Box.GENERATE_TEXTURE_COORDS, appearance);
-        tg.addChild(wall);
+                                   Appearance appearance, int i, int j, boolean render) {
+        if (render) {
+            Transform3D transform = new Transform3D();
+            transform.setTranslation(new Vector3d(x, y, z));
+            TransformGroup tg = new TransformGroup(transform);
+            TransformGroup container = new TransformGroup();
+            container.addChild(tg);
+            Box wall = new Box((float) width, (float) height, (float) depth,
+                    Box.GENERATE_NORMALS | Box.GENERATE_TEXTURE_COORDS, appearance);
+            tg.addChild(wall);
+            double left = x - width;
+            double top = z + depth;
+            double rectWidth = 2 * width;
+            double rectHeight = 2 * depth;
+            double bottom = top - rectHeight;
+            Rectangle2D.Double wallRect = new Rectangle2D.Double(left, bottom, rectWidth, rectHeight);
+            wallBounds.put(wallRect, new Point(i, j));
+            return container;
+        }
+
         double left = x - width;
         double top = z + depth;
         double rectWidth = 2 * width;
@@ -490,8 +548,10 @@ public class BasicScene extends JPanel implements MouseListener {
         double bottom = top - rectHeight;
         Rectangle2D.Double wallRect = new Rectangle2D.Double(left, bottom, rectWidth, rectHeight);
         wallBounds.put(wallRect, new Point(i, j));
-        return container;
+        return null;
     }
+
+
 
     private void createSpotlight(BranchGroup sceneBG) {
         spotlightTG = new TransformGroup();
@@ -525,10 +585,25 @@ public class BasicScene extends JPanel implements MouseListener {
             @Override
             public void keyPressed(KeyEvent e) {
                 switch (e.getKeyChar()) {
-                    case 'w': upPressed = true; break;
-                    case 's': downPressed = true; break;
-                    case 'a': leftPressed = true; break;
-                    case 'd': rightPressed = true; break;
+                    case 'w':
+                        upPressed = true;
+                        break;
+                    case 's':
+                        downPressed = true;
+                        break;
+                    case 'a':
+                        leftPressed = true;
+                        break;
+                    case 'd':
+                        rightPressed = true;
+                        break;
+                    case 'e':
+                        // Only allow the blue player (playerId == 2) to activate the treasure.
+                        if (playerId == 2) {
+                            out.println("TREASURE_ACTIVATE");
+                            System.out.println("TREASURE_ACTIVATE sent by blue player.");
+                        }
+                        break;
                     default:
                         break;
                 }
@@ -536,15 +611,24 @@ public class BasicScene extends JPanel implements MouseListener {
             @Override
             public void keyReleased(KeyEvent e) {
                 switch (e.getKeyChar()) {
-                    case 'w': upPressed = false; break;
-                    case 's': downPressed = false; break;
-                    case 'a': leftPressed = false; break;
-                    case 'd': rightPressed = false; break;
+                    case 'w':
+                        upPressed = false;
+                        break;
+                    case 's':
+                        downPressed = false;
+                        break;
+                    case 'a':
+                        leftPressed = false;
+                        break;
+                    case 'd':
+                        rightPressed = false;
+                        break;
                     default:
                         break;
                 }
             }
         });
+
 
         canvas.setFocusable(true);
         canvas.requestFocusInWindow();
@@ -706,6 +790,14 @@ public class BasicScene extends JPanel implements MouseListener {
         spotlightTG.setTransform(spotlightTransform);
     }
 
+    public void sendKillEvent() {
+        double posX = (playerId == 1) ? redBoxPos.x : blueBoxPos.x;
+        double posZ = (playerId == 1) ? redBoxPos.z : blueBoxPos.z;
+        out.println("KILL " + playerId + " " + posX + " " + 0.1 + " " + posZ);
+        System.out.println("Kill event sent for player " + playerId);
+    }
+
+
     private boolean collidesWithWall(double x, double z) {
         double half = GhostModel.getCharacterHalf();
         double side = 2 * half;
@@ -842,7 +934,13 @@ public class BasicScene extends JPanel implements MouseListener {
     public void mousePressed(MouseEvent e){}
     public void mouseReleased(MouseEvent e) {}
     public void mouseEntered(MouseEvent e) {}
+    @Override
+    //either:
+    //RED clicks on player
+    //or
+    //BLUE clicks on NPC
     public void mouseClicked(MouseEvent e) {
+        // Compute the pick ray from the click coordinates.
         Point3d pixelPos = new Point3d();
         Point3d eyePos = new Point3d();
         canvas.getPixelLocationInImagePlate(e.getX(), e.getY(), pixelPos);
@@ -857,19 +955,51 @@ public class BasicScene extends JPanel implements MouseListener {
         rayDirection.sub(pixelPos, eyePos);
         rayDirection.normalize();
 
-        pickTool.setShapeRay(eyePos, rayDirection);
-//        System.out.println(pickTool.pickClosest());
-        if (pickTool.pickClosest() != null) {
+        redPickTool.setShapeRay(eyePos, rayDirection);
+//        System.out.println(redPickTool.pickClosest());
+        if (redPickTool.pickClosest() != null) {
             double dist = Math.pow((Math.pow(redBoxPos.x - blueBoxPos.x, 2) + Math.pow(redBoxPos.z - blueBoxPos.z, 2)), .5);
             if (dist < .5f && playerId == 1) {
                 blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
                 blueGhost.updatePositionAndRotation(blueBoxPos.x, blueBoxPos.z, GhostModel.DIRECTION_DOWN);
+                sendKillEvent();
             }
+        }
+
+
+
+        bluePickTool.setShapeRay(eyePos, rayDirection);
+//        System.out.println(redPickTool.pickClosest());
+        if (bluePickTool.pickClosest() != null) {
+            Appearance greenAppearance = new Appearance();
+            Color3f greenColor = new Color3f(0.0f, 1.0f, 0.0f); // Green for NPCs
+            Material material = new Material(
+                    greenColor,                     // Ambient color
+                    new Color3f(0.1f, 0.1f, 0.1f),  // Emissive color
+                    greenColor,                     // Diffuse color
+                    new Color3f(1.0f, 1.0f, 1.0f),  // Specular color
+                    64.0f                           // Shininess
+            );
+            greenAppearance.setMaterial(material);
+            updateAppearance(blueGhost.getTransformGroup(), greenAppearance);
+//            System.out.println("HELLO WORLD THIS HAPPENS");
         }
 
         return;
     }
 
+
+    private void updateAppearance(Node node, Appearance app) {
+        if (node instanceof Shape3D) {
+//            ((Shape3D)node).setCapability(Shape3D.ALLOW_APPEARANCE_WRITE);
+            ((Shape3D) node).setAppearance(app);
+        } else if (node instanceof Group) {
+            Group group = (Group) node;
+            for (int i = 0; i < group.numChildren(); i++) {
+                updateAppearance(group.getChild(i), app);
+            }
+        }
+    }
 
     private BranchGroup createTreasure(double x, double y, double z) {
         if (treasureAppearance == null) {
