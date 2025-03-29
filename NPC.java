@@ -65,6 +65,8 @@ public class NPC {
             // Load the model
             Scene modelScene = loader.load(MODEL_PATH);
             BranchGroup modelBG = modelScene.getSceneGroup();
+            modelBG.setCapability(BranchGroup.ALLOW_PICKABLE_READ);
+
             
             // Create green appearance
             Appearance greenAppearance = new Appearance();
