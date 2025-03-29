@@ -19,12 +19,11 @@ import org.jogamp.java3d.loaders.objectfile.ObjectFile;
 import org.jogamp.java3d.utils.geometry.Box;
 import org.jogamp.java3d.utils.geometry.Primitive;
 import org.jogamp.java3d.utils.geometry.Cylinder;
-import org.jogamp.java3d.utils.geometry.Cylinder;
 import org.jogamp.java3d.utils.image.TextureLoader;
+import org.jogamp.java3d.utils.picking.PickResult;
 import org.jogamp.java3d.utils.picking.PickTool;
 import org.jogamp.java3d.utils.universe.SimpleUniverse;
 import org.jogamp.vecmath.*;
-import org.jogamp.java3d.utils.picking.PickTool;
 
 public class BasicScene extends JPanel implements MouseListener {
     private static final long serialVersionUID = 1L;
@@ -196,6 +195,31 @@ public class BasicScene extends JPanel implements MouseListener {
             String line;
             try {
                 while ((line = in.readLine()) != null) {
+                    // Check if the message is a kill event.
+                    if (line.startsWith("KILL")) {
+                        // (Existing kill event handling code...)
+                        String[] tokens = line.split(" ");
+                        if (tokens.length >= 2) {
+                            int killedPlayerId = Integer.parseInt(tokens[1]);
+                            // Reset positions, update camera, etc.
+                            if (killedPlayerId == 1 && blueGhost != null) {
+                                blueBoxPos.set(0.0, 0.1, 0.0);
+                                blueGhost.updatePositionAndRotation(0.0, 0.0, GhostModel.DIRECTION_DOWN);
+                                updateCamera();
+                            }
+                            System.out.println("Received kill event for player " + killedPlayerId + " and reset to center");
+                        }
+                        continue;
+                    }
+                    // New: Handle treasure morph broadcast
+                    if (line.startsWith("TREASURE_MORPH")) {
+                        if (treasureKeyBehavior != null) {
+                            treasureKeyBehavior.startMorphAnimation();
+                            System.out.println("TREASURE_MORPH activated.");
+                        }
+                        continue;
+                    }
+                    // Handle NPC update messages.
                     if (line.startsWith("NPC_UPDATE")) {
                         String[] tokens = line.split(" ");
                         for (int i = 1; i < tokens.length; i += 4) {
@@ -210,6 +234,7 @@ public class BasicScene extends JPanel implements MouseListener {
                         }
                         continue;
                     }
+                    // Process regular player position updates.
                     String[] tokens = line.split(" ");
                     if (tokens.length < 4)
                         continue;
@@ -217,12 +242,10 @@ public class BasicScene extends JPanel implements MouseListener {
                     double x = Double.parseDouble(tokens[1]);
                     double y = Double.parseDouble(tokens[2]);
                     double z = Double.parseDouble(tokens[3]);
-
                     int direction = GhostModel.DIRECTION_DOWN;
                     if (tokens.length >= 5) {
                         direction = Integer.parseInt(tokens[4]);
                     }
-
                     if (id == 1 && redGhost != null) {
                         redGhost.updatePositionAndRotation(x, z, direction);
                     } else if (id == 2 && blueGhost != null) {
@@ -233,6 +256,8 @@ public class BasicScene extends JPanel implements MouseListener {
                 e.printStackTrace();
             }
         }).start();
+
+
     }
 
     // --- Scene Creation ---
@@ -520,6 +545,8 @@ public class BasicScene extends JPanel implements MouseListener {
         return null;
     }
 
+
+
     private void createSpotlight(BranchGroup sceneBG) {
         spotlightTG = new TransformGroup();
         spotlightTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
@@ -552,10 +579,25 @@ public class BasicScene extends JPanel implements MouseListener {
             @Override
             public void keyPressed(KeyEvent e) {
                 switch (e.getKeyChar()) {
-                    case 'w': upPressed = true; break;
-                    case 's': downPressed = true; break;
-                    case 'a': leftPressed = true; break;
-                    case 'd': rightPressed = true; break;
+                    case 'w':
+                        upPressed = true;
+                        break;
+                    case 's':
+                        downPressed = true;
+                        break;
+                    case 'a':
+                        leftPressed = true;
+                        break;
+                    case 'd':
+                        rightPressed = true;
+                        break;
+                    case 'e':
+                        // Only allow the blue player (playerId == 2) to activate the treasure.
+                        if (playerId == 2) {
+                            out.println("TREASURE_ACTIVATE");
+                            System.out.println("TREASURE_ACTIVATE sent by blue player.");
+                        }
+                        break;
                     default:
                         break;
                 }
@@ -563,15 +605,24 @@ public class BasicScene extends JPanel implements MouseListener {
             @Override
             public void keyReleased(KeyEvent e) {
                 switch (e.getKeyChar()) {
-                    case 'w': upPressed = false; break;
-                    case 's': downPressed = false; break;
-                    case 'a': leftPressed = false; break;
-                    case 'd': rightPressed = false; break;
+                    case 'w':
+                        upPressed = false;
+                        break;
+                    case 's':
+                        downPressed = false;
+                        break;
+                    case 'a':
+                        leftPressed = false;
+                        break;
+                    case 'd':
+                        rightPressed = false;
+                        break;
                     default:
                         break;
                 }
             }
         });
+
 
         canvas.setFocusable(true);
         canvas.requestFocusInWindow();
@@ -720,6 +771,14 @@ public class BasicScene extends JPanel implements MouseListener {
         spotlightTG.setTransform(spotlightTransform);
     }
 
+    public void sendKillEvent() {
+        double posX = (playerId == 1) ? redBoxPos.x : blueBoxPos.x;
+        double posZ = (playerId == 1) ? redBoxPos.z : blueBoxPos.z;
+        out.println("KILL " + playerId + " " + posX + " " + 0.1 + " " + posZ);
+        System.out.println("Kill event sent for player " + playerId);
+    }
+
+
     private boolean collidesWithWall(double x, double z) {
         double half = GhostModel.getCharacterHalf();
         double side = 2 * half;
@@ -856,11 +915,13 @@ public class BasicScene extends JPanel implements MouseListener {
     public void mousePressed(MouseEvent e){}
     public void mouseReleased(MouseEvent e) {}
     public void mouseEntered(MouseEvent e) {}
+    @Override
     //either:
     //RED clicks on player
     //or
     //BLUE clicks on NPC
     public void mouseClicked(MouseEvent e) {
+        // Compute the pick ray from the click coordinates.
         Point3d pixelPos = new Point3d();
         Point3d eyePos = new Point3d();
         canvas.getPixelLocationInImagePlate(e.getX(), e.getY(), pixelPos);
@@ -882,6 +943,7 @@ public class BasicScene extends JPanel implements MouseListener {
             if (dist < .5f && playerId == 1) {
                 blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
                 blueGhost.updatePositionAndRotation(blueBoxPos.x, blueBoxPos.z, GhostModel.DIRECTION_DOWN);
+                sendKillEvent();
             }
         }
 
@@ -906,6 +968,7 @@ public class BasicScene extends JPanel implements MouseListener {
 
         return;
     }
+
 
     private void updateAppearance(Node node, Appearance app) {
         if (node instanceof Shape3D) {
