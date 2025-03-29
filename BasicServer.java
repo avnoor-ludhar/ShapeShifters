@@ -25,7 +25,7 @@ public class BasicServer {
         // Print the server's IP address.
         try {
             InetAddress localHost = InetAddress.getLocalHost();
-            String serverIP = localHost.getHostAddress();
+            String serverIP = "10.72.31.248";
             System.out.println("Server IP address: " + serverIP);
         } catch (UnknownHostException e) {
             e.printStackTrace();
