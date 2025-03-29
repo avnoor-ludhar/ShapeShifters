@@ -34,7 +34,8 @@ public class BasicScene extends JPanel implements MouseListener {
     private GhostModel redGhost;
     private GhostModel blueGhost;
     private Canvas3D canvas;
-    private PickTool pickTool;
+    private PickTool redPickTool;
+    private PickTool bluePickTool;
     // Player positions (x, y, z) – y remains constant at 0.1.
     private Vector3d redBoxPos = new Vector3d(0.0, 0.1, 0.0);
     private Vector3d blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
@@ -336,6 +337,13 @@ public class BasicScene extends JPanel implements MouseListener {
             }
         }
 
+
+        BranchGroup npcBG = new BranchGroup();
+        npcBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
+        for (NPC npc: npcs) {
+            npcBG.addChild(npc.getTransformGroup());
+        }
+      
         for (int i = 11; i < 14; i++) {
             for (int j = 11; j < 14; j++) {
                 addWall(sceneBG,
@@ -345,9 +353,10 @@ public class BasicScene extends JPanel implements MouseListener {
             }
         }
 
-        for (NPC npc : npcs) {
-            sceneBG.addChild(npc.getTransformGroup());
-        }
+        bluePickTool = new PickTool(npcBG);
+        bluePickTool.setMode(PickTool.BOUNDS);
+        sceneBG.addChild(npcBG);
+
 
 
         if (treasureBranchGroup != null) {
@@ -366,8 +375,10 @@ public class BasicScene extends JPanel implements MouseListener {
         blueGhostBranch.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
         blueGhostBranch.addChild(blueGhostTransform);
         sceneBG.addChild(blueGhostBranch);
-        pickTool = new PickTool(blueGhostBranch);                 // initialize 'pickTool' and allow 'cubeBG' pickable
-        pickTool.setMode(PickTool.BOUNDS);
+        redPickTool = new PickTool(blueGhostBranch);                 // initialize 'redPickTool' and allow 'cubeBG' pickable
+        redPickTool.setMode(PickTool.BOUNDS);
+
+
 
         Cylinder base = new Cylinder(0.1f, .2f);
         Transform3D baseTransform = new Transform3D();
@@ -845,6 +856,10 @@ public class BasicScene extends JPanel implements MouseListener {
     public void mousePressed(MouseEvent e){}
     public void mouseReleased(MouseEvent e) {}
     public void mouseEntered(MouseEvent e) {}
+    //either:
+    //RED clicks on player
+    //or
+    //BLUE clicks on NPC
     public void mouseClicked(MouseEvent e) {
         Point3d pixelPos = new Point3d();
         Point3d eyePos = new Point3d();
@@ -860,9 +875,9 @@ public class BasicScene extends JPanel implements MouseListener {
         rayDirection.sub(pixelPos, eyePos);
         rayDirection.normalize();
 
-        pickTool.setShapeRay(eyePos, rayDirection);
-//        System.out.println(pickTool.pickClosest());
-        if (pickTool.pickClosest() != null) {
+        redPickTool.setShapeRay(eyePos, rayDirection);
+//        System.out.println(redPickTool.pickClosest());
+        if (redPickTool.pickClosest() != null) {
             double dist = Math.pow((Math.pow(redBoxPos.x - blueBoxPos.x, 2) + Math.pow(redBoxPos.z - blueBoxPos.z, 2)), .5);
             if (dist < .5f && playerId == 1) {
                 blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
@@ -870,9 +885,39 @@ public class BasicScene extends JPanel implements MouseListener {
             }
         }
 
+
+
+        bluePickTool.setShapeRay(eyePos, rayDirection);
+//        System.out.println(redPickTool.pickClosest());
+        if (bluePickTool.pickClosest() != null) {
+            Appearance greenAppearance = new Appearance();
+            Color3f greenColor = new Color3f(0.0f, 1.0f, 0.0f); // Green for NPCs
+            Material material = new Material(
+                    greenColor,                     // Ambient color
+                    new Color3f(0.1f, 0.1f, 0.1f),  // Emissive color
+                    greenColor,                     // Diffuse color
+                    new Color3f(1.0f, 1.0f, 1.0f),  // Specular color
+                    64.0f                           // Shininess
+            );
+            greenAppearance.setMaterial(material);
+            updateAppearance(blueGhost.getTransformGroup(), greenAppearance);
+//            System.out.println("HELLO WORLD THIS HAPPENS");
+        }
+
         return;
     }
 
+    private void updateAppearance(Node node, Appearance app) {
+        if (node instanceof Shape3D) {
+//            ((Shape3D)node).setCapability(Shape3D.ALLOW_APPEARANCE_WRITE);
+            ((Shape3D) node).setAppearance(app);
+        } else if (node instanceof Group) {
+            Group group = (Group) node;
+            for (int i = 0; i < group.numChildren(); i++) {
+                updateAppearance(group.getChild(i), app);
+            }
+        }
+    }
 
     private BranchGroup createTreasure(double x, double y, double z) {
         if (treasureAppearance == null) {
