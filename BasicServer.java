@@ -5,10 +5,11 @@ import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.*;
+import java.util.Random;
 import org.jogamp.java3d.Appearance;
 import org.jogamp.java3d.Material;
-import org.jogamp.vecmath.*;
+import org.jogamp.vecmath.Color3f;
+import org.jogamp.vecmath.Vector3d;
 
 public class BasicServer {
     private static final int PORT = 5001;
@@ -22,6 +23,15 @@ public class BasicServer {
     private static String treasureMsg;
 
     public static void main(String[] args) {
+        // Print the server's IP address.
+        try {
+            InetAddress localHost = InetAddress.getLocalHost();
+            String serverIP = "10.72.31.248";
+            System.out.println("Server IP address: " + serverIP);
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        }
+
         // Initialize maze and designate moving walls.
         maze = GenerateMaze.getMaze(20, 20);
         // Clear a central area of the maze.
@@ -49,6 +59,7 @@ public class BasicServer {
                 for (int n = 0; n < movingWallsIndex; n++) {
                     if (movingWalls[n][0] == i && movingWalls[n][1] == j) {
                         found = true;
+                        break;
                     }
                 }
                 if (!found) {
@@ -87,7 +98,6 @@ public class BasicServer {
         for (int i = 0; i < npcCount; i++) {
             if (validPositions.isEmpty())
                 break;
-            // Note: Adjusted NPC movement step (0.005) as per group changes.
             NPC npc = NPC.generateRandomNPC(validPositions, npcAppearance, 0.005);
             npcs.add(npc);
         }
@@ -107,7 +117,6 @@ public class BasicServer {
                                     double wz = -1 + j * 0.103;
                                     double left = wx - 0.055;
                                     double top = wz + 0.055;
-                                    // Assuming each wall has a size of 0.11 in both dimensions.
                                     Rectangle2D.Double wallRect = new Rectangle2D.Double(left, top - 0.11, 0.11, 0.11);
                                     if (npcRect.intersects(wallRect))
                                         return true;
@@ -155,7 +164,6 @@ public class BasicServer {
         }
     }
 
-    // Broadcast a message to all connected clients.
     public static synchronized void broadcast(String message, ClientHandler sender) {
         for (ClientHandler client : clients) {
             client.sendMessage(message);
@@ -192,8 +200,7 @@ public class BasicServer {
                 out.println("NPC_COUNT " + npcs.size());
                 for (NPC npc : npcs) {
                     Vector3d pos = npc.getPosition();
-                    Vector3d dir = npc.getDirection();
-                    out.println("NPC_INIT " + pos.x + " " + pos.z + " " + dir.x + " " + dir.z);
+                    out.println("NPC_INIT " + pos.x + " " + pos.z + " 0 0");
                 }
 
                 // Send treasure coordinates.
@@ -209,20 +216,15 @@ public class BasicServer {
 
         @Override
         public void run() {
-            String inputLine;
+            String line;
             try {
-                while ((inputLine = in.readLine()) != null) {
-                    System.out.println("Received from player " + playerId + ": " + inputLine);
-                    broadcast(inputLine, this);
+                while ((line = in.readLine()) != null) {
+                    // Handle incoming messages (player position updates, etc.)
+                    // For simplicity, broadcast the message to all clients.
+                    broadcast(line, this);
                 }
             } catch (IOException e) {
                 e.printStackTrace();
-            } finally {
-                try {
-                    socket.close();
-                } catch (IOException e) {
-                    // Ignore
-                }
             }
         }
     }
