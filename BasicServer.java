@@ -229,11 +229,6 @@ public class BasicServer {
                         broadcast("TREASURE_MORPH", this);
                         continue;
                     }
-                    // If the message is a kill event, broadcast it and skip further processing.
-                    if (line.startsWith("KILL")) {
-                        broadcast(line, this);
-                        continue;
-                    }
                     // Process regular player position updates.
                     String[] tokens = line.split(" ");
                     if (tokens.length < 4)

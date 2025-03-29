@@ -218,22 +218,7 @@ public class BasicScene extends JPanel implements MouseListener {
 //                        System.out.println("HELASDCASDCASD");
                         updateAppearance(blueGhost.getTransformGroup(), blueGhostCycle.originalAppearance);
                     }
-                    // Check if the message is a kill event.
-                    if (line.startsWith("KILL")) {
-                        // (Existing kill event handling code...)
-                        String[] tokens = line.split(" ");
-                        if (tokens.length >= 2) {
-                            int killedPlayerId = Integer.parseInt(tokens[1]);
-                            // Reset positions, update camera, etc.
-                            if (killedPlayerId == 1 && blueGhost != null) {
-                                blueBoxPos.set(0.0, 0.1, 0.0);
-                                blueGhost.updatePositionAndRotation(0.0, 0.0, GhostModel.DIRECTION_DOWN);
-                                updateCamera();
-                            }
-                            System.out.println("Received kill event for player " + killedPlayerId + " and reset to center");
-                        }
-                        continue;
-                    }
+
                     // New: Handle treasure morph broadcast
                     if (line.startsWith("TREASURE_MORPH")) {
                         if (treasureKeyBehavior != null) {
@@ -862,13 +847,6 @@ public class BasicScene extends JPanel implements MouseListener {
         spotlightTG.setTransform(spotlightTransform);
     }
 
-    public void sendKillEvent() {
-        double posX = (playerId == 1) ? redBoxPos.x : blueBoxPos.x;
-        double posZ = (playerId == 1) ? redBoxPos.z : blueBoxPos.z;
-        out.println("KILL " + playerId + " " + posX + " " + 0.1 + " " + posZ);
-        System.out.println("Kill event sent for player " + playerId);
-    }
-
 
     private boolean collidesWithWall(double x, double z) {
         double half = GhostModel.getCharacterHalf();
@@ -1043,7 +1021,6 @@ public class BasicScene extends JPanel implements MouseListener {
                 blueBoxPos.z = p.getY();
                 out.println(2 + " " + p.getX() + " " + 0.1 + " " + p.getY() + " " + GhostModel.DIRECTION_DOWN);
                 blueGhost.updatePositionAndRotation(p.getX(), p.getY(), GhostModel.DIRECTION_DOWN);
-                sendKillEvent();
             }
         }
 
