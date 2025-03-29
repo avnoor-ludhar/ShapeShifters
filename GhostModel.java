@@ -15,7 +15,7 @@ public class GhostModel {
     private static final String MODEL_PATH = "src/ShapeShifters/assets/ghost.obj";
 
     // Character collision constants
-    private static final double CHARACTER_HALF = 0.02;
+    private static final double CHARACTER_HALF = 0.025;
 
     // Direction constants
     public static final int DIRECTION_DOWN = 0;  // S key - default

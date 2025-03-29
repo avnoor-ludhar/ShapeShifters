@@ -13,7 +13,7 @@ public class NPC {
     // Model constants
     private static final double MODEL_SCALE = 0.05;
     private static final String MODEL_PATH = "src/ShapeShifters/assets/ghost.obj";
-    private static final double CHARACTER_HALF = 0.03; // Match this with GhostModel or adjust as needed
+    private static final double CHARACTER_HALF = 0.035; // Match this with GhostModel or adjust as needed
     
     // Transform hierarchy
     private TransformGroup positionTG; // Root TG - handles position only
