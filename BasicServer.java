@@ -30,7 +30,7 @@ public class BasicServer {
         // Print the server's IP address (hard-coded for testing)
         try {
             InetAddress localHost = InetAddress.getLocalHost();
-            String serverIP = "10.72.47.254";
+            String serverIP = "172.20.10.3";
             System.out.println("Server IP address: " + serverIP);
         } catch (UnknownHostException e) {
             e.printStackTrace();

@@ -21,14 +21,14 @@ public class TreasureKeyBehavior extends Behavior {
     private Alpha morphAlpha;
     private PrintWriter out;
 
-    public TreasureKeyBehavior(BranchGroup treasureBranchGroup,
-                               TransformGroup treasureGroup,
+    public TreasureKeyBehavior(TreasureManager tm,
                                Vector3d redBoxPos,
                                Vector3d blueBoxPos,
                                int playerId,
-                               BranchGroup rootBG, PrintWriter out) {
-        this.treasureBranchGroup = treasureBranchGroup;
-        this.treasureGroup = treasureGroup;
+                               BranchGroup rootBG,
+                               PrintWriter out) {
+        this.treasureBranchGroup = tm.getTreasureBranchGroup();
+        this.treasureGroup = tm.getTreasureGroup();
         this.redBoxPos = redBoxPos;
         this.blueBoxPos = blueBoxPos;
         this.playerId = playerId;
@@ -102,80 +102,53 @@ public class TreasureKeyBehavior extends Behavior {
         }
     }
 
-
     public void startMorphAnimation() {
-        // 1. Get current position and remove old treasure
+        // 1. Get current position and detach old treasure
         Transform3D currentPosition = new Transform3D();
         treasureGroup.getTransform(currentPosition);
-        treasureBranchGroup.detach();
+        treasureBranchGroup.detach();  // Detach from scene
 
-        // 2. Create morph target geometries with matching vertex counts
+        // 2. Create morph target geometries, appearance, and morph object as before
         GeometryArray[] geometries = new GeometryArray[2];
-        geometries[0] = createCoinGeometry();  // Starting shape (coin)
-        geometries[1] = createStarGeometry();  // Target shape (star)
-
-        // Verify vertex counts match
+        geometries[0] = createCoinGeometry();
+        geometries[1] = createStarGeometry();
         if (geometries[0].getVertexCount() != geometries[1].getVertexCount()) {
             System.err.println("Error: Morph targets have different vertex counts!");
             return;
         }
-
-        // 3. Create morph appearance with proper coloring and solid fill
         Appearance treasureAppearance = new Appearance();
-
-        // Create a more vibrant gold material
         Material goldMaterial = new Material(
-                new Color3f(1.0f, 0.84f, 0.0f),  // Ambient color (gold)
-                new Color3f(0.0f, 0.0f, 0.0f),    // Emissive color
-                new Color3f(1.0f, 0.84f, 0.0f),   // Diffuse color (gold)
-                new Color3f(1.0f, 1.0f, 1.0f),    // Specular color
-                64.0f);                         // Shininess
-
-        // Enable lighting and make material fully opaque
+                new Color3f(1.0f, 0.84f, 0.0f),
+                new Color3f(0.0f, 0.0f, 0.0f),
+                new Color3f(1.0f, 0.84f, 0.0f),
+                new Color3f(1.0f, 1.0f, 1.0f),
+                64.0f);
         goldMaterial.setLightingEnable(true);
         treasureAppearance.setMaterial(goldMaterial);
-
-        // Set polygon attributes to ensure solid fill
         PolygonAttributes polyAttrib = new PolygonAttributes();
         polyAttrib.setPolygonMode(PolygonAttributes.POLYGON_FILL);
         polyAttrib.setCullFace(PolygonAttributes.CULL_NONE);
         treasureAppearance.setPolygonAttributes(polyAttrib);
-
-        // Ensure transparency is disabled
         TransparencyAttributes transparency = new TransparencyAttributes();
         transparency.setTransparencyMode(TransparencyAttributes.NONE);
         treasureAppearance.setTransparencyAttributes(transparency);
 
-        // 4. Create morph object
         morph = new Morph(geometries, treasureAppearance);
         morph.setCapability(Morph.ALLOW_WEIGHTS_WRITE);
-
-        // Set initial weights (100% coin, 0% star)
-        double[] weights = new double[2];
-        weights[0] = 1.0f;
-        weights[1] = 0.0f;
+        double[] weights = new double[]{1.0, 0.0};
         morph.setWeights(weights);
 
-        // 5. Create custom morph behavior
         TransformGroup rotationTG = new TransformGroup();
         rotationTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
         rotationTG.addChild(morph);
-
-        // Create alpha for morph animation
         morphAlpha = new Alpha(-1, Alpha.INCREASING_ENABLE, 0, 0, 2000, 0, 0, 0, 0, 0);
-
-        // Create behavior to update weights based on alpha
         Behavior morphBehavior = new Behavior() {
             private WakeupOnElapsedFrames wakeupFrame = new WakeupOnElapsedFrames(0);
-            public void initialize() {
-                wakeupOn(wakeupFrame);
-            }
+            public void initialize() { wakeupOn(wakeupFrame); }
             public void processStimulus(Iterator<WakeupCriterion> criteria) {
                 if (morphAlpha != null && morph != null) {
                     float alphaValue = morphAlpha.value();
-                    double[] newWeights = new double[2];
-                    newWeights[0] = 1.0f - alphaValue; // Coin weight decreases
-                    newWeights[1] = alphaValue;       // Star weight increases
+                    double[] newWeights = new double[]{1.0 - alphaValue, alphaValue};
                     morph.setWeights(newWeights);
                 }
                 wakeupOn(wakeupFrame);
@@ -184,16 +157,12 @@ public class TreasureKeyBehavior extends Behavior {
         morphBehavior.setSchedulingBounds(new BoundingSphere(new Point3d(0,0,0), 100.0));
         rotationTG.addChild(morphBehavior);
 
-        // 6. Create rotation animation
-        Alpha rotationAlpha = new Alpha(-1, Alpha.INCREASING_ENABLE,
-                0, 0, 4000, 0, 0, 0, 0, 0);
+        Alpha rotationAlpha = new Alpha(-1, Alpha.INCREASING_ENABLE, 0, 0, 4000, 0, 0, 0, 0, 0);
         RotationInterpolator rotator = new RotationInterpolator(
-                rotationAlpha, rotationTG, new Transform3D(),
-                0.0f, (float) (Math.PI * 2.0f));
+                rotationAlpha, rotationTG, new Transform3D(), 0.0f, (float)(Math.PI * 2.0f));
         rotator.setSchedulingBounds(new BoundingSphere(new Point3d(0,0,0), 100.0));
         rotationTG.addChild(rotator);
 
-        // 7. Create new treasure group
         TransformGroup newTreasureTG = new TransformGroup(currentPosition);
         newTreasureTG.setCapability(TransformGroup.ALLOW_TRANSFORM_READ);
         newTreasureTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
@@ -205,11 +174,16 @@ public class TreasureKeyBehavior extends Behavior {
         newTreasureBG.setCapability(BranchGroup.ALLOW_DETACH);
         newTreasureBG.addChild(newTreasureTG);
 
-        // 8. Update references and add to scene
+        // Ensure the new treasure branch isn't already attached
+        if(newTreasureBG.getParent() != null) {
+            ((Group)newTreasureBG.getParent()).removeChild(newTreasureBG);
+        }
+
         this.treasureBranchGroup = newTreasureBG;
         this.treasureGroup = newTreasureTG;
         rootBG.addChild(newTreasureBG);
     }
+
 
     // Updated Geometry Creation Methods
     private GeometryArray createCoinGeometry() {
