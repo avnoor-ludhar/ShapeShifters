@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
 public class BasicServer {
+
     private static final int PORT = 5001;
     private static List<ClientHandler> clients = new ArrayList<>();
     private static int nextPlayerId = 1;
@@ -27,7 +28,7 @@ public class BasicServer {
     private static Map<Integer, Vector3d> playerPositions = new ConcurrentHashMap<>();
 
     public static void main(String[] args) {
-        // Print the server's IP address (hard-coded for testing)
+        // print local IP for reference
         try {
             InetAddress localHost = InetAddress.getLocalHost();
             String serverIP = "172.20.10.3";
@@ -36,12 +37,12 @@ public class BasicServer {
             e.printStackTrace();
         }
 
-        // Use MazeManager to generate the maze and designate moving walls.
+        // generate maze and moving wall data
         MazeManager mazeManager = new MazeManager(MAZE_HEIGHT, MAZE_WIDTH);
         maze = mazeManager.getMaze();
         movingWalls = mazeManager.getMovingWalls();
 
-        // Generate valid positions for NPCs from open maze cells.
+        // find valid positions from open cells
         List<Vector3d> validPositions = new ArrayList<>();
         for (int i = 0; i < MAZE_HEIGHT; i++) {
             for (int j = 0; j < MAZE_WIDTH; j++) {
@@ -54,12 +55,12 @@ public class BasicServer {
         }
 
         Random rand = new Random();
-        // Generate treasure coordinates from one valid position.
+        // pick treasure position randomly
         Vector3d treasurePos = validPositions.get(rand.nextInt(validPositions.size()));
         treasureMsg = "TREASURE " + treasurePos.x + " " + treasurePos.y + " " + treasurePos.z;
         validPositions.remove(treasurePos);
 
-        // Create 3 NPCs with a green appearance.
+        // create green NPCs from valid positions
         Appearance npcAppearance = new Appearance();
         npcAppearance.setMaterial(new Material(
                 new Color3f(0.0f, 1.0f, 0.0f),
@@ -69,43 +70,47 @@ public class BasicServer {
                 64.0f));
         int npcCount = 3;
         for (int i = 0; i < npcCount; i++) {
-            if (validPositions.isEmpty())
-                break;
+            if (validPositions.isEmpty()) break;
             NPC npc = NPC.generateRandomNPC(validPositions, npcAppearance, 0.005);
             npcs.add(npc);
         }
 
+        // set up user ghost model
         userGhost = new GhostModel(true, new Vector3d(0.0, 0.1, 0.0));
 
-        userGhost = new GhostModel(true, new Vector3d(0.0, 0.1, 0.0));
-
-        // Periodically update NPC positions and broadcast their states.
+        // npc update loop with collisions
         new Thread(() -> {
             while (true) {
-                // Update each NPC with wall collisions and player collisions
                 for (NPC npc : npcs) {
-                    // Existing wall collision check
+                    // check collision with maze walls
                     npc.update((x, z) -> {
                         double half = 0.03;
                         double side = 2 * half;
+
+                        // create bounding box around NPC at (x, z)
                         Rectangle2D.Double npcRect = new Rectangle2D.Double(x - half, z - half, side, side);
+
                         for (int i = 0; i < MAZE_HEIGHT; i++) {
                             for (int j = 0; j < MAZE_WIDTH; j++) {
-                                if (maze.get(i).get(j) == 1) {
-                                    double wx = -1 + i * 0.103;
-                                    double wz = -1 + j * 0.103;
-                                    double left = wx - 0.055;
-                                    double top = wz + 0.055;
+                                if (maze.get(i).get(j) == 1) { // if cell is a wall
+                                    double wx = -1 + i * 0.103; // convert grid to world x
+                                    double wz = -1 + j * 0.103; // convert grid to world z
+
+                                    double left = wx - 0.055; // wall left edge in world coords
+                                    double top = wz + 0.055;  // wall top edge in world coords
+
+                                    // define wall's bounding box in world space
                                     Rectangle2D.Double wallRect = new Rectangle2D.Double(left, top - 0.11, 0.11, 0.11);
-                                    if (npcRect.intersects(wallRect))
-                                        return true;
+
+                                    // check for collision between NPC and wall
+                                    if (npcRect.intersects(wallRect)) return true;
                                 }
                             }
                         }
-                        return false;
+                        return false; // no collision
                     }, userGhost);
 
-                    // New: Check collisions with players
+                    // check collision with players
                     Vector3d npcPos = npc.getPosition();
                     double npcHalf = NPC.getCharacterHalf();
                     for (Map.Entry<Integer, Vector3d> entry : playerPositions.entrySet()) {
@@ -115,7 +120,7 @@ public class BasicServer {
                         if (CollisionDetector.isColliding(npcPos.x, npcPos.z, npcHalf,
                                 playerPos.x, playerPos.z, playerHalf)) {
 
-                            // Calculate push back direction (from NPC to player)
+                            // get normalized direction from player to npc
                             Vector3d collisionNormal = new Vector3d(
                                     npcPos.x - playerPos.x,
                                     0,
@@ -123,17 +128,16 @@ public class BasicServer {
                             );
                             collisionNormal.normalize();
 
-                            // Set a stronger bounce factor
-                            double bounceFactor = 1.5; // Adjust this value as needed
+                            double bounceFactor = 1.5; // scale amount of displacement
 
-                            // Calculate new position that pushes the NPC away
+                            // compute new npc position pushed away from player
                             Vector3d newNPCPos = new Vector3d(
                                     npcPos.x + collisionNormal.x * npc.getStep() * bounceFactor,
                                     0.1,
                                     npcPos.z + collisionNormal.z * npc.getStep() * bounceFactor
                             );
 
-                            // Reverse and slightly randomize direction
+                            // reflect and randomize npc direction slightly
                             Vector3d newDirection = new Vector3d(
                                     -npc.getDirection().x + (Math.random() * 0.2 - 0.1),
                                     0,
@@ -141,17 +145,13 @@ public class BasicServer {
                             );
                             newDirection.normalize();
 
-                            npc.setDirection(newDirection);
-                            npc.setPosition(newNPCPos);
-
-                            // Debug logging (optional)
-                            System.out.println("NPC collided with player " + entry.getKey() +
-                                    " - New NPC pos: " + newNPCPos + " New direction: " + newDirection);
+                            npc.setDirection(newDirection); // apply new direction
+                            npc.setPosition(newNPCPos);     // apply new position
                         }
                     }
                 }
 
-                // Existing NPC-NPC collision check
+                // check collision between npcs
                 for (int i = 0; i < npcs.size(); i++) {
                     for (int j = i + 1; j < npcs.size(); j++) {
                         NPC npc1 = npcs.get(i);
@@ -159,41 +159,45 @@ public class BasicServer {
                         Vector3d pos1 = npc1.getPosition();
                         Vector3d pos2 = npc2.getPosition();
 
+                        // check if npc1 and npc2 are colliding
                         if (CollisionDetector.isColliding(pos1.x, pos1.z, NPC.getCharacterHalf(),
                                 pos2.x, pos2.z, NPC.getCharacterHalf())) {
 
-                            // Calculate push back direction
+                            // get direction vector from npc1 to npc2
                             Vector3d dir1To2 = new Vector3d();
                             dir1To2.sub(pos2, pos1);
                             dir1To2.normalize();
 
-                            // Adjust positions
+                            // move npc1 slightly away from npc2
                             Vector3d newPos1 = new Vector3d(
                                     pos1.x - dir1To2.x * npc1.getStep(),
                                     0.1,
                                     pos1.z - dir1To2.z * npc1.getStep()
                             );
 
+                            // move npc2 slightly away from npc1
                             Vector3d newPos2 = new Vector3d(
                                     pos2.x + dir1To2.x * npc2.getStep(),
                                     0.1,
                                     pos2.z + dir1To2.z * npc2.getStep()
                             );
 
-                            // Reverse directions
+                            // reverse directions of both npcs
                             npc1.setDirection(new Vector3d(-npc1.getDirection().x, 0, -npc1.getDirection().z));
                             npc2.setDirection(new Vector3d(-npc2.getDirection().x, 0, -npc2.getDirection().z));
 
-                            // Update positions
+                            // apply new positions
                             npc1.setPosition(newPos1);
                             npc2.setPosition(newPos2);
                         }
                     }
                 }
 
-                broadcastNPCPositions();
+
+                broadcastNPCPositions(); // send npc data to clients
+
                 try {
-                    Thread.sleep(50);
+                    Thread.sleep(50); // wait before next update
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -203,24 +207,25 @@ public class BasicServer {
         System.out.println("Server starting on port " + PORT);
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             while (true) {
-                Socket clientSocket = serverSocket.accept();
+                Socket clientSocket = serverSocket.accept(); // wait for client
                 System.out.println("New client connected: " + clientSocket);
                 ClientHandler handler = new ClientHandler(clientSocket, nextPlayerId++);
                 clients.add(handler);
-                new Thread(handler).start();
+                new Thread(handler).start(); // start client thread
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
+    // send npc positions to all clients
     public static synchronized void broadcastNPCPositions() {
         StringBuilder npcState = new StringBuilder("NPC_UPDATE");
         for (int i = 0; i < npcs.size(); i++) {
             NPC npc = npcs.get(i);
             Vector3d pos = npc.getPosition();
             Vector3d dir = npc.getDirection();
-            
+
             npcState.append(" ").append(i)
                     .append(" ").append(pos.x)
                     .append(" ").append(0.1)
@@ -233,13 +238,14 @@ public class BasicServer {
         }
     }
 
-    // Updated broadcast method: sends the message to all clients.
+    // broadcast a message to all clients
     public static synchronized void broadcast(String message, ClientHandler sender) {
         for (ClientHandler client : clients) {
             client.sendMessage(message);
         }
     }
 
+    // client handler logic
     static class ClientHandler implements Runnable {
         private Socket socket;
         private PrintWriter out;
@@ -252,28 +258,27 @@ public class BasicServer {
             try {
                 out = new PrintWriter(socket.getOutputStream(), true);
                 in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                // Send the player's ID to the client.
-                out.println("ID " + playerId);
-                // Send maze data as a concatenated string.
+                out.println("ID " + playerId); // send player id
+
                 StringBuilder mazeStr = new StringBuilder();
                 for (ArrayList<Integer> row : maze) {
                     for (Integer cell : row) {
                         mazeStr.append(cell);
                     }
                 }
-                out.println(mazeStr.toString());
-                // Send moving wall coordinates.
+                out.println(mazeStr.toString()); // send maze
+
                 for (int[] coords : movingWalls) {
-                    out.println(coords[0] + " " + coords[1]);
+                    out.println(coords[0] + " " + coords[1]); // send moving wall
                 }
-                // Send NPC initialization information.
+
                 out.println("NPC_COUNT " + npcs.size());
                 for (NPC npc : npcs) {
                     Vector3d pos = npc.getPosition();
                     out.println("NPC_INIT " + pos.x + " " + pos.z + " 0 0");
                 }
-                // Send treasure information.
-                out.println(treasureMsg);
+
+                out.println(treasureMsg); // send treasure info
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -284,46 +289,42 @@ public class BasicServer {
         }
 
         @Override
+        // run server
         public void run() {
             String line;
             try {
                 while ((line = in.readLine()) != null) {
-                    // Handle treasure activation.
                     if (line.startsWith("TREASURE_ACTIVATE")) {
                         broadcast("TREASURE_MORPH", this);
                         continue;
                     }
-                    // Handle game end messages.
                     if (line.startsWith("GAME_END")) {
                         broadcast(line, this);
                         continue;
                     }
-                    // Handle ghost morph commands
                     if (line.startsWith("GREEN") || line.startsWith("BLUE")) {
                         broadcast(line, this);
                         continue;
                     }
-                    // Process regular player position updates.
-                    String[] tokens = line.split(" ");
-                    if (tokens.length < 4)
-                        continue;
 
-                    // Update player position in the map
+                    String[] tokens = line.split(" ");
+                    if (tokens.length < 4) continue;
+
                     int id = Integer.parseInt(tokens[0]);
                     double x = Double.parseDouble(tokens[1]);
                     double y = Double.parseDouble(tokens[2]);
                     double z = Double.parseDouble(tokens[3]);
-                    playerPositions.put(id, new Vector3d(x, y, z));
+                    playerPositions.put(id, new Vector3d(x, y, z)); // update player position
 
                     broadcast(line, this);
                 }
             } catch (IOException e) {
                 e.printStackTrace();
             } finally {
-                playerPositions.remove(playerId);
+                playerPositions.remove(playerId); // remove player on disconnect
                 try {
                     socket.close();
-                } catch (IOException e) { /* Ignore */ }
+                } catch (IOException e) { /* ignore */ }
             }
         }
     }
