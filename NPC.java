@@ -1,6 +1,5 @@
 package ShapeShifters;
 
-import java.awt.geom.Rectangle2D;
 import java.util.List;
 import java.util.Random;
 import org.jogamp.java3d.*;
@@ -9,6 +8,7 @@ import org.jogamp.java3d.loaders.objectfile.ObjectFile;
 import org.jogamp.java3d.utils.geometry.Box;
 import org.jogamp.vecmath.*;
 
+// Class that represents a non-player character
 public class NPC {
     // Model constants
     private static final double MODEL_SCALE = 0.05;
@@ -29,6 +29,7 @@ public class NPC {
         boolean collides(double x, double z);
     }
 
+    // Initializes the NPC’s position, direction, model, and rotation
     public NPC(Vector3d pos, Vector3d dir, double step, Appearance unusedAppearance) {
         this.position = new Vector3d(pos);
         this.direction = new Vector3d(dir);
@@ -39,7 +40,6 @@ public class NPC {
             this.direction.x = dir.x / length;
             this.direction.z = dir.z / length;
         }
-        
         this.step = step;
 
         // Create position TransformGroup (root)
@@ -63,6 +63,8 @@ public class NPC {
         System.out.println("NPC created with direction: " + direction);
     }
 
+    // Loads the 3D ghost model and applies green appearance
+    // Adds LOD support or fallback box
     private void loadGhostModel() {
         try {
             // Create ObjectFile loader
@@ -89,9 +91,7 @@ public class NPC {
             // Apply appearance to all shapes in the model
             applyAppearanceToModel(modelBG, greenAppearance);
             
-            // IMPORTANT: Set the initial orientation of the model
             // This ensures the model is facing the correct direction initially (down)
-            // so that rotations will align properly
             Transform3D modelOrientation = new Transform3D();
             TransformGroup orientationTG = new TransformGroup(modelOrientation);
             orientationTG.addChild(modelBG);
@@ -106,8 +106,8 @@ public class NPC {
             Node mediumDetailNode = createSimplifiedGhost(greenAppearance, 0.8);
             Node lowDetailNode = createSimplifiedGhost(greenAppearance, 0.6);
             
-            // Set appropriate LOD distances - not too close, not too far
-            // Switch to medium detail at 1.0 units, low detail at 2.0 units
+            // Set appropriate LOD distances
+                // Not too close, not too far
             double[] distances = {1.2, 1.5, 2.0};
             
             // Create LOD node with all detail levels
@@ -132,14 +132,8 @@ public class NPC {
             rotationTG.addChild(npcBox);
         }
     }
-    
-    /**
-     * Create a simplified ghost model with the proper dimensions
-     * 
-     * @param appearance The appearance to apply to the model
-     * @param scaleFactor Scale factor for the model (relative to full detail)
-     * @return A Node containing the simplified ghost
-     */
+
+    // Creates a simplified green box for medium/low LOD rendering
     private Node createSimplifiedGhost(Appearance appearance, double scaleFactor) {
         // Create a box similar to the ghost size
         // Use a smaller box - CHARACTER_HALF is 0.03, GhostModel uses 0.02
@@ -161,6 +155,7 @@ public class NPC {
         return scaleTG;
     }
 
+    // Recursively applies the green appearance to all parts of the model
     private void applyAppearanceToModel(Node node, Appearance appearance) {
         if (node instanceof Shape3D) {
             Shape3D shape = (Shape3D) node;
@@ -173,6 +168,7 @@ public class NPC {
         }
     }
 
+    // Updates the NPCs rotation based on direction vector
     public void updateRotation() {
         // Create a fresh transform for rotation
         Transform3D rotTransform = new Transform3D();
@@ -185,33 +181,40 @@ public class NPC {
         if (Math.abs(direction.x) > 0 && Math.abs(direction.z) > 0) {
             // Diagonal movement
             if (direction.x < 0 && direction.z > 0) {
-                // Down-left
+                // Down left
                 angle = -Math.PI/4;
-            } else if (direction.x < 0 && direction.z < 0) {
-                // Up-left
+            }
+            else if (direction.x < 0 && direction.z < 0) {
+                // Up left
                 angle = -3*Math.PI/4;
-            } else if (direction.x > 0 && direction.z > 0) {
-                // Down-right
+            }
+            else if (direction.x > 0 && direction.z > 0) {
+                // Down right
                 angle = Math.PI/4;
-            } else {
-                // Up-right
+            }
+            else {
+                // Up right
                 angle = 3*Math.PI/4;
             }
-        } else if (Math.abs(direction.x) > Math.abs(direction.z)) {
+        }
+        else if (Math.abs(direction.x) > Math.abs(direction.z)) {
             // Moving primarily along X axis
             if (direction.x > 0) {
                 // Right
                 angle = Math.PI/2;
-            } else {
+            }
+            else {
                 // Left
                 angle = -Math.PI/2;
             }
-        } else {
+        }
+        else {
             // Moving primarily along Z axis
             if (direction.z < 0) {
                 // Up
                 angle = Math.PI;
-            } else {
+            }
+            else {
                 // Down (default orientation)
                 angle = 0.0;
             }
@@ -224,14 +227,17 @@ public class NPC {
         rotationTG.setTransform(rotTransform);
     }
 
+    // Gets the direction of the NPC
     public Vector3d getDirection() {
         return new Vector3d(direction);
     }
 
+    // Gets the position of the NPC
     public Vector3d getPosition() {
         return new Vector3d(position);
     }
 
+    // How the NPC bounces off surfaces
     public void bounce() {
         // Reverse the direction vector
         direction.scale(-1);
@@ -244,21 +250,25 @@ public class NPC {
         positionTG.setTransform(posTransform);
     }
 
+    // Sets position of NPC
     public void setPosition(Vector3d newPos) {
         this.position = new Vector3d(newPos);
     }
 
+    // TG
     public TransformGroup getTransformGroup() {
-        return positionTG; // Return the root transform group
+        return positionTG;
     }
-    
+
+    // Gets the middle of the NPC model
     public static double getCharacterHalf() {
         return CHARACTER_HALF;
     }
 
+    // Sets the direction of the NPC
     public void setDirection(Vector3d newDir) {
         this.direction.set(newDir);
-        this.direction.normalize(); // Ensure consistent movement speed
+        this.direction.normalize();
         updateRotation();
     }
 
@@ -266,6 +276,7 @@ public class NPC {
         return this.step;
     }
 
+    // Updates NPC position and handles collisions with maze and player
     public void update(CollisionChecker checker, GhostModel userGhost) {
         // Calculate new position based on current direction
         double newX = position.x + direction.x * step;
@@ -296,7 +307,8 @@ public class NPC {
             }
             
             if (!directionChanged) {
-                // No valid move found, don't change position
+                // No valid move found
+                // Dont change position
                 return;
             }
         }
@@ -309,8 +321,7 @@ public class NPC {
         Transform3D posTransform = new Transform3D();
         posTransform.setTranslation(position);
         positionTG.setTransform(posTransform);
-        
-        // CRITICAL: Always update rotation when direction changes
+
         if (directionChanged) {
             // Force rotation update when direction changes
             updateRotation();
@@ -320,24 +331,20 @@ public class NPC {
         updateLODPositions();
     }
 
-    /**
-     * Updates the position of all LOD behaviors in this NPC
-     */
+    // Updates the LOD system with current NPC position
     private void updateLODPositions() {
         // Search for DistanceLOD behaviors in the scene graph
         if (rotationTG != null) {
             updateLODPositionsInGroup(rotationTG);
         }
     }
-    
-    /**
-     * Recursively search for DistanceLOD behaviors in the scene graph
-     */
+
     private void updateLODPositionsInGroup(Node node) {
         if (node instanceof DistanceLOD) {
             // Update the position of the LOD behavior
             LODHelper.updateLODPosition((DistanceLOD) node, position);
-        } else if (node instanceof Group) {
+        }
+        else if (node instanceof Group) {
             Group group = (Group) node;
             // Search all children
             for (int i = 0; i < group.numChildren(); i++) {
@@ -347,27 +354,28 @@ public class NPC {
     }
 
     // Helper method to randomize direction when collision occurs
+        // Supports 8 directions
     private Vector3d randomizeDirection() {
         Random rand = new Random();
-        int choice = rand.nextInt(8); // 8 directions instead of 4
+        int choice = rand.nextInt(8);
         Vector3d newDir;
         
         switch (choice) {
-            case 0: newDir = new Vector3d(1, 0, 0);    // Right
+            case 0: newDir = new Vector3d(1, 0, 0);
                 break;
-            case 1: newDir = new Vector3d(-1, 0, 0);   // Left
+            case 1: newDir = new Vector3d(-1, 0, 0);
                 break;
-            case 2: newDir = new Vector3d(0, 0, 1);    // Down
+            case 2: newDir = new Vector3d(0, 0, 1);
                 break;
-            case 3: newDir = new Vector3d(0, 0, -1);   // Up
+            case 3: newDir = new Vector3d(0, 0, -1);
                 break;
-            case 4: newDir = new Vector3d(1, 0, 1);    // Down-right
+            case 4: newDir = new Vector3d(1, 0, 1);
                 break;
-            case 5: newDir = new Vector3d(-1, 0, 1);   // Down-left
+            case 5: newDir = new Vector3d(-1, 0, 1);
                 break;
-            case 6: newDir = new Vector3d(1, 0, -1);   // Up-right
+            case 6: newDir = new Vector3d(1, 0, -1);
                 break;
-            default: newDir = new Vector3d(-1, 0, -1); // Up-left
+            default: newDir = new Vector3d(-1, 0, -1);
                 break;
         }
         
@@ -381,9 +389,7 @@ public class NPC {
         return newDir;
     }
 
-    /**
-     * Creates an NPC at a random valid position with a random cardinal direction.
-     */
+    // Creating an NPC at a random position
     public static NPC generateRandomNPC(List<Vector3d> validPositions, Appearance appearance, double step) {
         if (validPositions.isEmpty()) {
             throw new IllegalArgumentException("No valid positions available");
@@ -393,25 +399,25 @@ public class NPC {
         Vector3d pos = validPositions.remove(index);
 
         Random rand = new Random();
-        int choice = rand.nextInt(8); // Now supporting 8 directions
+        int choice = rand.nextInt(8);
         Vector3d dir;
         
         switch (choice) {
-            case 0: dir = new Vector3d(1, 0, 0);    // Right
+            case 0: dir = new Vector3d(1, 0, 0);
                 break;
-            case 1: dir = new Vector3d(-1, 0, 0);   // Left
+            case 1: dir = new Vector3d(-1, 0, 0);
                 break;
-            case 2: dir = new Vector3d(0, 0, 1);    // Down
+            case 2: dir = new Vector3d(0, 0, 1);
                 break;
-            case 3: dir = new Vector3d(0, 0, -1);   // Up
+            case 3: dir = new Vector3d(0, 0, -1);
                 break;
-            case 4: dir = new Vector3d(1, 0, 1);    // Down-right
+            case 4: dir = new Vector3d(1, 0, 1);
                 break;
-            case 5: dir = new Vector3d(-1, 0, 1);   // Down-left
+            case 5: dir = new Vector3d(-1, 0, 1);
                 break;
-            case 6: dir = new Vector3d(1, 0, -1);   // Up-right
+            case 6: dir = new Vector3d(1, 0, -1);
                 break;
-            default: dir = new Vector3d(-1, 0, -1); // Up-left
+            default: dir = new Vector3d(-1, 0, -1);
                 break;
         }
         
@@ -425,11 +431,10 @@ public class NPC {
         return new NPC(pos, dir, step, appearance);
     }
 
-    /**
-     * Update the NPC's direction and rotation based on a new direction vector
-     */
+
+    // Updates direction of NPC model after bounce
     public void updateDirection(Vector3d newDirection) {
-        // Normalize the direction if needed
+        // Normalize the direction
         if (newDirection.x != 0 && newDirection.z != 0) {
             double length = Math.sqrt(newDirection.x * newDirection.x + newDirection.z * newDirection.z);
             newDirection.x = newDirection.x / length;
