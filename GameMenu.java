@@ -119,10 +119,9 @@ public class GameMenu extends JFrame {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 0));
         buttonPanel.setBackground(backgroundColor);
         buttonPanel.setBorder(new EmptyBorder(10, 0, 10, 0));
-
-        // Set both buttons to the same size (250x60)
+        // Set both buttons to the same size
+        // (250x60)
         Dimension buttonSize = new Dimension(250, 60);
-
         playButton = new JButton("PLAY");
         playButton.setFont(buttonFont);
         playButton.setForeground(Color.WHITE);
@@ -133,7 +132,6 @@ public class GameMenu extends JFrame {
         // Remove border so that it doesn't blend in
         playButton.setBorder(BorderFactory.createEmptyBorder());
         playButton.setPreferredSize(buttonSize);
-
         exitButton = new JButton("EXIT");
         exitButton.setFont(buttonFont);
         exitButton.setForeground(Color.WHITE);
@@ -146,7 +144,7 @@ public class GameMenu extends JFrame {
         exitButton.setPreferredSize(buttonSize);
         exitButton.addActionListener(e -> System.exit(0));
 
-        // Add hover effects for PLAY button.
+        // Add hover effects for PLAY button
         playButton.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseEntered(MouseEvent e) {
@@ -183,16 +181,14 @@ public class GameMenu extends JFrame {
         mainPanel.add(titlePanel, BorderLayout.NORTH);
         mainPanel.add(formPanel, BorderLayout.CENTER);
         mainPanel.add(buttonPanel, BorderLayout.SOUTH);
-
-        // IMPORTANT: set mainPanel non-opaque so that the shooting stars are visible behind it.
         mainPanel.setOpaque(false);
-        // Wrap the original main panel inside our background panel that paints shooting stars.
+        // Wrap the original main panel inside our background panel that paints shooting stars
         StarBackgroundPanel backgroundPanel = new StarBackgroundPanel();
         backgroundPanel.setLayout(new BorderLayout());
         backgroundPanel.add(mainPanel, BorderLayout.CENTER);
         setContentPane(backgroundPanel);
 
-        // Make the frame draggable.
+        // Make the frame draggable
         addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
@@ -214,7 +210,7 @@ public class GameMenu extends JFrame {
         });
     }
 
-    // Immediately loads the game logo image from the specified file path.
+    // Immediately loads the game logo image from the provided file path
     private void loadGameLogo() {
         try {
             String imagePath = "src/ShapeShifters/Textures/MenuTexture.png";
@@ -235,6 +231,7 @@ public class GameMenu extends JFrame {
         }
     }
 
+    // Creates a styled JTextField with consistent look
     private JTextField createStyledTextField() {
         JTextField field = new JTextField();
         field.setFont(new Font("Arial", Font.PLAIN, 16));
@@ -247,11 +244,13 @@ public class GameMenu extends JFrame {
         ));
         return field;
     }
-
+    // Attempts to start the game session
+        // Shows a loading dialog and launches the game scene
     private void startGame() {
         String ipAddress = ipAddressField.getText().trim();
         String username = usernameField.getText().trim();
 
+        // Error handling
         if (ipAddress.isEmpty() || username.isEmpty()) {
             showErrorDialog("Please enter both IP address and username.");
             return;
@@ -287,6 +286,7 @@ public class GameMenu extends JFrame {
         }).start();
     }
 
+    // Displays an error message in a modal dialog
     private void showErrorDialog(String message) {
         JDialog errorDialog = new JDialog(this, "Error", true);
         errorDialog.setSize(400, 180);
@@ -323,6 +323,7 @@ public class GameMenu extends JFrame {
         errorDialog.setVisible(true);
     }
 
+    // Entry point to launch the game menu
     public static void main(String[] args) {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -333,24 +334,25 @@ public class GameMenu extends JFrame {
     }
 }
 
-
+// Custom JPanel that animates shooting stars
+// Used as the visual background for the GameMenu
 class StarBackgroundPanel extends JPanel {
     private List<ShootingStar> stars = new ArrayList<>();
     private Timer timer;
     // Increase the number of stars for a more frequent effect.
     private final int STAR_COUNT = 60;
 
+    // Constructor for stars and starts the animation timer
     public StarBackgroundPanel() {
-        // Set the background color (if needed)
         setBackground(new Color(30, 30, 40));
-        // Initialize stars when the panel is first displayed.
+        // Initialize stars when the panel is first displayed
         addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
                 initializeStars();
             }
         });
-        // Timer to update the stars.
+        // Timer to update the stars
         timer = new Timer(30, e -> {
             updateStars();
             repaint();
@@ -358,6 +360,7 @@ class StarBackgroundPanel extends JPanel {
         timer.start();
     }
 
+    // Initializes random shooting stars across the panel
     private void initializeStars() {
         stars.clear();
         int width = getWidth();
@@ -367,6 +370,7 @@ class StarBackgroundPanel extends JPanel {
         }
     }
 
+    // Updates the position of each star
     private void updateStars() {
         int width = getWidth();
         int height = getHeight();
@@ -376,6 +380,7 @@ class StarBackgroundPanel extends JPanel {
     }
 
     @Override
+    // Paints all the stars
     protected void paintComponent(Graphics g) {
         // Call super.paintComponent to clear the background first.
         super.paintComponent(g);
@@ -388,6 +393,7 @@ class StarBackgroundPanel extends JPanel {
     }
 }
 
+// Class that represents a single animated star
 class ShootingStar {
     private int x, y;
     private int dx, dy;
@@ -395,10 +401,12 @@ class ShootingStar {
     private Color color;
     private Random rand = new Random();
 
+    // Initializes star with random direction and speed
     public ShootingStar(int panelWidth, int panelHeight) {
         reset(panelWidth, panelHeight);
     }
 
+    // Updates star position and resets if it is off the screen
     public void update(int panelWidth, int panelHeight) {
         x += dx;
         y += dy;
@@ -408,6 +416,7 @@ class ShootingStar {
         }
     }
 
+    // Resets star to a random position above screen with new velocity
     private void reset(int panelWidth, int panelHeight) {
         x = rand.nextInt(panelWidth);
         y = -rand.nextInt(50); // start off-screen at the top
@@ -417,6 +426,8 @@ class ShootingStar {
         color = Color.WHITE;
     }
 
+    // Draws the star as a slanted line
+        // Added effects to get the streaks across the stars
     public void draw(Graphics2D g2d) {
         g2d.setColor(color);
         g2d.drawLine(x, y, x - dx * length / 10, y - dy * length / 10);
