@@ -1,7 +1,6 @@
 package ShapeShifters;
 
 import org.jogamp.java3d.BranchGroup;
-
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
@@ -11,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+// Class that has the main GUI for the game menu
 public class GameMenu extends JFrame {
     private JTextField ipAddressField;
     private JTextField usernameField;
@@ -28,12 +28,13 @@ public class GameMenu extends JFrame {
     private Point dragStart = null;
     private JLabel imageLabel; // For the game logo/image
 
+    // Constructor to initialize and display the full menu UI
     public GameMenu() {
         // Load custom fonts with larger sizes
         try {
-            titleFont = new Font("Arial", Font.BOLD, 36); // Increased from 28
-            labelFont = new Font("Tahoma", Font.BOLD, 18); // Increased from 16
-            buttonFont = new Font("Arial", Font.BOLD, 20); // Increased from 18
+            titleFont = new Font("Arial", Font.BOLD, 36);
+            labelFont = new Font("Tahoma", Font.BOLD, 18);
+            buttonFont = new Font("Arial", Font.BOLD, 20);
         } catch (Exception e) {
             System.out.println("Error loading fonts: " + e.getMessage());
             titleFont = new Font("SansSerif", Font.BOLD, 36);
@@ -41,7 +42,7 @@ public class GameMenu extends JFrame {
             buttonFont = new Font("SansSerif", Font.BOLD, 20);
         }
 
-        // Set up the JFrame with larger dimensions and no window decorations.
+        // Set up the JFrame with larger dimensions and no window decorations
         setTitle("Shape Shifters");
         setSize(700, 600);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -50,7 +51,7 @@ public class GameMenu extends JFrame {
         setUndecorated(true);
         setShape(new RoundRectangle2D.Double(0, 0, 700, 600, 25, 25));
 
-        // Main panel with background color and padding.
+        // Main panel with background color and padding
         JPanel mainPanel = new JPanel(new BorderLayout());
         mainPanel.setBackground(backgroundColor);
         mainPanel.setBorder(new EmptyBorder(25, 30, 25, 30));
@@ -60,12 +61,10 @@ public class GameMenu extends JFrame {
         titlePanel.setLayout(new BoxLayout(titlePanel, BoxLayout.Y_AXIS));
         titlePanel.setBackground(backgroundColor);
         titlePanel.setBorder(new EmptyBorder(10, 0, 20, 0));
-
         JLabel titleLabel = new JLabel("SHAPE SHIFTERS");
         titleLabel.setFont(titleFont);
         titleLabel.setForeground(highlightColor);
         titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-
         JLabel subtitleLabel = new JLabel("Multiplayer Maze Adventure");
         subtitleLabel.setFont(new Font("Arial", Font.ITALIC, 20));
         subtitleLabel.setForeground(textColor);
@@ -77,9 +76,8 @@ public class GameMenu extends JFrame {
         imageLabel.setMaximumSize(new Dimension(300, 200));
         imageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // Load the game logo image immediately.
+        // Load the game logo image immediately
         loadGameLogo();
-
         titlePanel.add(titleLabel);
         titlePanel.add(Box.createRigidArea(new Dimension(0, 5)));
         titlePanel.add(subtitleLabel);
