@@ -30,48 +30,16 @@ public class BasicServer {
         // Print the server's IP address (hard-coded for testing)
         try {
             InetAddress localHost = InetAddress.getLocalHost();
-            String serverIP = "10.72.47.254";
+            String serverIP = "172.20.10.3";
             System.out.println("Server IP address: " + serverIP);
         } catch (UnknownHostException e) {
             e.printStackTrace();
         }
 
-        // Initialize maze and designate moving walls.
-        maze = GenerateMaze.getMaze(20, 20);
-        // Clear a central area of the maze.
-        for (int i = 9; i < 12; i++) {
-            for (int j = 9; j < 12; j++) {
-                maze.get(i).set(j, 0);
-            }
-        }
-        // Randomly remove 10% of walls.
-        for (int i = 1; i < MAZE_HEIGHT - 1; i++) {
-            for (int j = 1; j < MAZE_WIDTH - 1; j++) {
-                if (Math.random() < 0.2) {
-                    maze.get(i).set(j, 0);
-                }
-            }
-        }
-        // Designate 4 moving wall positions.
-        Random rand = new Random();
-        int movingWallsIndex = 0;
-        while (movingWallsIndex < 4) {
-            int i = rand.nextInt(18) + 1;
-            int j = rand.nextInt(18) + 1;
-            boolean found = false;
-            if (maze.get(i).get(j) == 1) {
-                for (int n = 0; n < movingWallsIndex; n++) {
-                    if (movingWalls[n][0] == i && movingWalls[n][1] == j) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    movingWalls[movingWallsIndex] = new int[]{i, j};
-                    movingWallsIndex++;
-                }
-            }
-        }
+        // Use MazeManager to generate the maze and designate moving walls.
+        MazeManager mazeManager = new MazeManager(MAZE_HEIGHT, MAZE_WIDTH);
+        maze = mazeManager.getMaze();
+        movingWalls = mazeManager.getMovingWalls();
 
         // Generate valid positions for NPCs from open maze cells.
         List<Vector3d> validPositions = new ArrayList<>();
@@ -85,6 +53,7 @@ public class BasicServer {
             }
         }
 
+        Random rand = new Random();
         // Generate treasure coordinates from one valid position.
         Vector3d treasurePos = validPositions.get(rand.nextInt(validPositions.size()));
         treasureMsg = "TREASURE " + treasurePos.x + " " + treasurePos.y + " " + treasurePos.z;

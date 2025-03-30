@@ -20,7 +20,6 @@ import org.jogamp.java3d.utils.geometry.Box;
 import org.jogamp.java3d.utils.geometry.Primitive;
 import org.jogamp.java3d.utils.geometry.Cylinder;
 import org.jogamp.java3d.utils.image.TextureLoader;
-import org.jogamp.java3d.utils.picking.PickResult;
 import org.jogamp.java3d.utils.picking.PickTool;
 import org.jogamp.java3d.utils.universe.SimpleUniverse;
 import org.jogamp.vecmath.*;
@@ -86,28 +85,12 @@ public class BasicScene extends JPanel implements MouseListener {
     private boolean leftPressed = false;
     private boolean rightPressed = false;
 
-    // Star system variables
-    private static final int STAR_COUNT = 15000;
-    private static final int SHOOTING_STAR_COUNT = 150;
-    private static final float STAR_FIELD_RADIUS = 10.0f;
-    private TransformGroup starSystemTG;
-    private Shape3D shootingStarShape;
-    private PointArray shootingStarPoints;
-    private Random random = new Random();
-
-    // Treasure (coin/star) variables
-    private BranchGroup treasureBranchGroup;
-    private TransformGroup treasureGroup; // Reference to the treasure's TransformGroup
-    private Appearance treasureAppearance; // Appearance for the treasure
-    // NEW: Define a constant for interaction distance and a flag to track state.
-    private static final double TREASURE_INTERACT_DISTANCE = 0.15;
-    private boolean treasureIsCoin = true;
-
     // Fields for IP address and username
     private String ipAddress;
     private String username;
     private BranchGroup rootBG;
     private TreasureKeyBehavior treasureKeyBehavior;
+    private TreasureManager treasureManager;
 
     // Add these field declarations to the class
     private MazeSign mazeSign; // Renamed to be more generic since we only have one sign
@@ -200,7 +183,7 @@ public class BasicScene extends JPanel implements MouseListener {
                 double tx = Double.parseDouble(parts[1]);
                 double ty = Double.parseDouble(parts[2]);
                 double tz = Double.parseDouble(parts[3]);
-                treasureBranchGroup = createTreasure(tx, ty, tz);
+                this.treasureManager = new TreasureManager(tx,ty, tz);
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -245,14 +228,14 @@ public class BasicScene extends JPanel implements MouseListener {
                             double z = Double.parseDouble(tokens[i + 3]);
                             double dirX = Double.parseDouble(tokens[i + 4]); // Direction X
                             double dirZ = Double.parseDouble(tokens[i + 5]); // Direction Z
-                            
+
                             NPC npc = npcs.get(npcId);
                             Vector3d newPos = new Vector3d(x, y, z);
                             npc.setPosition(newPos);
                             Transform3D transform = new Transform3D();
                             transform.setTranslation(newPos);
                             npc.getTransformGroup().setTransform(transform);
-                            
+
                             // Update direction and rotation
                             npc.updateDirection(new Vector3d(dirX, 0, dirZ));
                         }
@@ -307,7 +290,8 @@ public class BasicScene extends JPanel implements MouseListener {
         background.setApplicationBounds(bounds);
         sceneBG.addChild(background);
 
-        createStarSystem(sceneBG);
+        ShootingStars shootingStars = new ShootingStars();
+        sceneBG.addChild(shootingStars.getStarSystemTG());
 
         Appearance platformAppearance = new Appearance();
         platformAppearance.setMaterial(new Material(
@@ -413,7 +397,7 @@ public class BasicScene extends JPanel implements MouseListener {
         for (NPC npc: npcs) {
             npcBG.addChild(npc.getTransformGroup());
         }
-      
+
         for (int i = 9; i < 12; i++) {
             for (int j = 9; j < 12; j++) {
                 addWall(sceneBG,
@@ -429,11 +413,11 @@ public class BasicScene extends JPanel implements MouseListener {
 
 
 
-        if (treasureBranchGroup != null) {
-            sceneBG.addChild(treasureBranchGroup);
+        if (treasureManager.getTreasureBranchGroup() != null) {
+            sceneBG.addChild(treasureManager.getTreasureBranchGroup() );
 
             // Create and add treasure behavior
-            treasureKeyBehavior = new TreasureKeyBehavior(treasureBranchGroup, treasureGroup, redBoxPos, blueBoxPos, playerId, sceneBG, out);
+            treasureKeyBehavior = new TreasureKeyBehavior(treasureManager, redBoxPos, blueBoxPos, playerId, sceneBG, out);
             treasureKeyBehavior.setSchedulingBounds(new BoundingSphere(new Point3d(0,0,0), 100.0));
             sceneBG.addChild(treasureKeyBehavior);
         }
@@ -485,7 +469,7 @@ public class BasicScene extends JPanel implements MouseListener {
         if (s1 == null || s2 == null) {
             System.exit(1); //this won't happen dw
         }
-        
+
         // LEFT FAN BLADE
         // Create high detail version for left fan
         TransformGroup tg1 = new TransformGroup();
@@ -495,7 +479,7 @@ public class BasicScene extends JPanel implements MouseListener {
         transform1.setScale(.1);
         tg1.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
         tg1.setTransform(transform1);
-        
+
         // Create a low detail version (small box) for the left fan blade
         TransformGroup lowDetailLeftTG = new TransformGroup();
         Appearance fanAppearance = new Appearance();
@@ -509,16 +493,16 @@ public class BasicScene extends JPanel implements MouseListener {
         fanAppearance.setMaterial(fanMaterial);
         Box lowDetailFan = new Box(0.01f, 0.01f, 0.01f, Box.GENERATE_NORMALS, fanAppearance);
         lowDetailLeftTG.addChild(lowDetailFan);
-        
+
         // Create empty medium detail node - we'll just use two levels
         TransformGroup emptyLeftTG = new TransformGroup();
         Box emptyBox = new Box(0.001f, 0.001f, 0.001f, Box.GENERATE_NORMALS, fanAppearance);
         emptyLeftTG.addChild(emptyBox);
-        
+
         // Create LOD for left fan blade
         double[] fanDistances = {2.3, 2.4, 100.0}; // Almost immediate transition
         BranchGroup leftFanLODBG = LODHelper.createLOD(tg1, emptyLeftTG, lowDetailLeftTG, fanDistances);
-        
+
         // RIGHT FAN BLADE
         // Create high detail version for right fan (using separate model instance)
         TransformGroup tg2 = new TransformGroup();
@@ -528,17 +512,17 @@ public class BasicScene extends JPanel implements MouseListener {
         transform2.setScale(.1);
         tg2.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
         tg2.setTransform(transform2);
-        
+
         // Create a low detail version for the right fan blade
         TransformGroup lowDetailRightTG = new TransformGroup();
         Box lowDetailFanRight = new Box(0.01f, 0.01f, 0.01f, Box.GENERATE_NORMALS, fanAppearance);
         lowDetailRightTG.addChild(lowDetailFanRight);
-        
+
         // Create empty medium detail node - we'll just use two levels
         TransformGroup emptyRightTG = new TransformGroup();
         Box emptyRightBox = new Box(0.001f, 0.001f, 0.001f, Box.GENERATE_NORMALS, fanAppearance);
         emptyRightTG.addChild(emptyRightBox);
-        
+
         // Create LOD for right fan blade (using same distances)
         BranchGroup rightFanLODBG = LODHelper.createLOD(tg2, emptyRightTG, lowDetailRightTG, fanDistances);
 
@@ -564,7 +548,7 @@ public class BasicScene extends JPanel implements MouseListener {
         rootBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
 
         // When creating the fan components, add user data to identify them:
-        
+
         leftFanLODBG.setUserData("fan-left");
         rightFanLODBG.setUserData("fan-right");
 
@@ -711,13 +695,6 @@ public class BasicScene extends JPanel implements MouseListener {
                     case 'd':
                         rightPressed = true;
                         break;
-                    case 'e':
-                        // Only allow the blue player (playerId == 2) to activate the treasure.
-                        if (playerId == 2) {
-                            out.println("TREASURE_ACTIVATE");
-                            System.out.println("TREASURE_ACTIVATE sent by blue player.");
-                        }
-                        break;
                     default:
                         break;
                 }
@@ -768,18 +745,9 @@ public class BasicScene extends JPanel implements MouseListener {
         universe.addBranchGraph(sceneBG);
         setLayout(new BorderLayout());
         add("Center", canvas);
-
-//        // In setupUniverse method:
-//        javax.swing.Timer endTimer = new javax.swing.Timer(2000, new ActionListener() {
-//            @Override
-//            public void actionPerformed(ActionEvent e) {
-//                GameEndAnimation gameEnd = new GameEndAnimation(universe, rootBG);
-//                gameEnd.triggerGameEnd("Blue");
-//            }
-//        });
-//        endTimer.setRepeats(false); // Ensure the timer only fires once
-//        endTimer.start();
     }
+
+
 
     private void updateMovement() {
         double dx = 0, dz = 0;
@@ -926,7 +894,7 @@ public class BasicScene extends JPanel implements MouseListener {
         viewTransform.lookAt(eye, center, up);
         viewTransform.invert();
         universe.getViewingPlatform().getViewPlatformTransform().setTransform(viewTransform);
-        
+
         // Update fan blade LOD positions
         updateFanLODPositions();
     }
@@ -945,10 +913,10 @@ public class BasicScene extends JPanel implements MouseListener {
     private void updateFanLODPositions() {
         // Get the player position based on playerId
         Vector3d playerPos = (playerId == 1) ? redBoxPos : blueBoxPos;
-        
+
         // Calculate the position of the fan (at center with cylinder)
         Vector3d fanPosition = new Vector3d(0.03, 0.1, 0.03);
-        
+
         // Find only fan-related DistanceLOD behaviors and update them
         // We need to be more specific about which LODs we're updating
         if (rootBG != null) {
@@ -958,7 +926,7 @@ public class BasicScene extends JPanel implements MouseListener {
                 Node child = rootBG.getChild(i);
                 if (child instanceof TransformGroup) {
                     TransformGroup tg = (TransformGroup)child;
-                    // Only look for fan LODs - you might need to add 
+                    // Only look for fan LODs - you might need to add
                     // some kind of identifier to find these specifically
                     if (isFanComponent(tg)) {
                         updateFanLODInGroup(tg, playerPos);
@@ -967,7 +935,7 @@ public class BasicScene extends JPanel implements MouseListener {
             }
         }
     }
-    
+
     /**
      * Checks if a node is part of the fan structure
      */
@@ -975,10 +943,10 @@ public class BasicScene extends JPanel implements MouseListener {
         // This is a simplification - you'll need to adapt this
         // to identify your fan components specifically
         // One approach is to check if the node contains a specific UserData
-        return node.getUserData() != null && 
+        return node.getUserData() != null &&
                node.getUserData().toString().contains("fan");
     }
-    
+
     /**
      * Updates LOD positions specifically for fan components
      */
@@ -1035,93 +1003,19 @@ public class BasicScene extends JPanel implements MouseListener {
         }
     }
 
-    private void createStarSystem(BranchGroup sceneBG) {
-        Transform3D starSystemTransform = new Transform3D();
-        starSystemTG = new TransformGroup(starSystemTransform);
-        starSystemTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
-
-        PointArray starPoints = new PointArray(STAR_COUNT, GeometryArray.COORDINATES | GeometryArray.COLOR_3);
-        for (int i = 0; i < STAR_COUNT; i++) {
-            double theta = 2.0 * Math.PI * random.nextDouble();
-            double phi = Math.acos(2.0 * random.nextDouble() - 1.0);
-            float x = (float)(STAR_FIELD_RADIUS * Math.sin(phi) * Math.cos(theta));
-            float y = (float)(STAR_FIELD_RADIUS * Math.sin(phi) * Math.sin(theta));
-            float z = (float)(STAR_FIELD_RADIUS * Math.cos(phi));
-            starPoints.setCoordinate(i, new Point3f(x, y, z));
-            float brightness = 0.5f + random.nextFloat() * 0.5f;
-            starPoints.setColor(i, new Color3f(brightness, brightness, brightness));
-        }
-        Appearance starAppearance = new Appearance();
-        PointAttributes starPointAttributes = new PointAttributes();
-        starPointAttributes.setPointSize(2.0f);
-        starAppearance.setPointAttributes(starPointAttributes);
-        Shape3D starShape = new Shape3D(starPoints, starAppearance);
-        starSystemTG.addChild(starShape);
-
-        shootingStarPoints = new PointArray(SHOOTING_STAR_COUNT, GeometryArray.COORDINATES | GeometryArray.COLOR_3);
-        shootingStarPoints.setCapability(GeometryArray.ALLOW_COORDINATE_WRITE);
-        shootingStarPoints.setCapability(GeometryArray.ALLOW_COLOR_WRITE);
-        for (int i = 0; i < SHOOTING_STAR_COUNT; i++) {
-            initializeShootingStar(i);
-        }
-        Appearance shootingStarAppearance = new Appearance();
-        PointAttributes shootingStarPointAttributes = new PointAttributes();
-        shootingStarPointAttributes.setPointSize(5.0f);
-        shootingStarAppearance.setPointAttributes(shootingStarPointAttributes);
-        shootingStarShape = new Shape3D(shootingStarPoints, shootingStarAppearance);
-        shootingStarShape.setCapability(Shape3D.ALLOW_GEOMETRY_WRITE);
-        starSystemTG.addChild(shootingStarShape);
-        sceneBG.addChild(starSystemTG);
-
-        startShootingStarAnimation();
-    }
-
-    private void initializeShootingStar(int index) {
-        double angle = random.nextDouble() * 2.0 * Math.PI;
-        float x = STAR_FIELD_RADIUS * 0.9f;
-        float y = (float)(STAR_FIELD_RADIUS * 0.7f * Math.sin(angle));
-        float z = (float)(STAR_FIELD_RADIUS * 0.7f * Math.cos(angle));
-        shootingStarPoints.setCoordinate(index, new Point3f(x, y, z));
-        shootingStarPoints.setColor(index, new Color3f(1.0f, 0.9f, 0.5f));
-    }
-
-    private void startShootingStarAnimation() {
-        new Thread(() -> {
-            try {
-                Thread.sleep(1000);
-                while (true) {
-                    for (int i = 0; i < SHOOTING_STAR_COUNT; i++) {
-                        Point3f pos = new Point3f();
-                        shootingStarPoints.getCoordinate(i, pos);
-                        pos.x -= 0.15f;
-                        pos.y -= 0.05f;
-                        if (pos.x < -STAR_FIELD_RADIUS || Math.abs(pos.y) > STAR_FIELD_RADIUS) {
-                            initializeShootingStar(i);
-                        } else {
-                            shootingStarPoints.setCoordinate(i, pos);
-                        }
-                    }
-                    Thread.sleep(16);
-                }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }).start();
-    }
-
     // Update the createMazeSigns method
     private void createMazeSigns(BranchGroup sceneBG) {
         // Calculate position for the North West sign
         double cornerX = 0.9;  // Adjust based on your maze size
         double cornerZ = 0.9;  // Adjust based on your maze size
         double signHeight = 0.3;  // Height above the ground
-        
+
         // Create only the North West sign with "The Maze" text
         mazeSign = new MazeSign(
-            new Vector3d(-cornerX, signHeight, -cornerZ), 
+            new Vector3d(-cornerX, signHeight, -cornerZ),
             "The Maze"
         );
-        
+
         // Add the sign to the scene
         sceneBG.addChild(mazeSign.getTransformGroup());
     }
@@ -1181,70 +1075,6 @@ public class BasicScene extends JPanel implements MouseListener {
         }
 
         return;
-    }
-
-
-
-    private BranchGroup createTreasure(double x, double y, double z) {
-        if (treasureAppearance == null) {
-            treasureAppearance = new Appearance();
-            treasureAppearance.setMaterial(new Material(
-                    new Color3f(1.0f, 0.84f, 0.0f),
-                    new Color3f(0.0f, 0.0f, 0.0f),
-                    new Color3f(1.0f, 0.84f, 0.0f),
-                    new Color3f(1.0f, 1.0f, 1.0f),
-                    64.0f));
-        }
-
-        // Create the coin shape (same as before)
-        float radius = 0.025f;
-        float height = 0.005f;
-        Cylinder treasureDisk = new Cylinder(radius, height,
-                Primitive.GENERATE_NORMALS | Primitive.GENERATE_TEXTURE_COORDS,
-                treasureAppearance);
-
-        treasureDisk.setCapability(Shape3D.ALLOW_PICKABLE_READ);
-        treasureDisk.setCapability(Shape3D.ALLOW_PICKABLE_WRITE);
-        treasureDisk.setPickable(true);
-        treasureDisk.setUserData("treasure");
-
-        // Create the transformation hierarchy (same as before)
-        Transform3D coinRotation = new Transform3D();
-        coinRotation.rotZ(Math.PI/2);
-
-        TransformGroup coinOrientationTG = new TransformGroup(coinRotation);
-        coinOrientationTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
-        coinOrientationTG.addChild(treasureDisk);
-        coinOrientationTG.setUserData("treasure");
-
-        TransformGroup rotationTG = new TransformGroup();
-        rotationTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
-        rotationTG.addChild(coinOrientationTG);
-
-        Alpha rotationAlpha = new Alpha(-1, Alpha.INCREASING_ENABLE, 0, 0, 4000, 0, 0, 0, 0, 0);
-        RotationInterpolator rotator = new RotationInterpolator(
-                rotationAlpha, rotationTG, new Transform3D(), 0.0f, (float)(Math.PI*2));
-        rotator.setSchedulingBounds(new BoundingSphere(new Point3d(0,0,0), 100.0));
-        rotationTG.addChild(rotator);
-
-        Transform3D position = new Transform3D();
-        position.setTranslation(new Vector3d(x, y, z));
-        TransformGroup positionedTG = new TransformGroup(position);
-        positionedTG.setCapability(TransformGroup.ALLOW_TRANSFORM_READ);
-        positionedTG.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
-        positionedTG.addChild(rotationTG);
-        positionedTG.setUserData("treasure");
-
-        this.treasureGroup = positionedTG;
-
-        // Wrap the TransformGroup in a BranchGroup
-        BranchGroup treasureBG = new BranchGroup();
-        treasureBG.setCapability(BranchGroup.ALLOW_CHILDREN_READ);
-        treasureBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
-        treasureBG.setCapability(BranchGroup.ALLOW_DETACH);
-        treasureBG.addChild(positionedTG);
-
-        return treasureBG;
     }
 
     public static void main(String[] args) {
