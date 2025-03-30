@@ -108,7 +108,7 @@ public class NPC {
             
             // Set appropriate LOD distances - not too close, not too far
             // Switch to medium detail at 1.0 units, low detail at 2.0 units
-            double[] distances = {1.0, 1.5, 2.0};
+            double[] distances = {1.2, 1.5, 2.0};
             
             // Create LOD node with all detail levels
             BranchGroup lodBG = LODHelper.createLOD(modelScaleTG, mediumDetailNode, lowDetailNode, distances);
