@@ -5,6 +5,7 @@ import org.jogamp.vecmath.*;
 
 import java.awt.event.KeyEvent;
 import java.awt.AWTEvent;
+import java.io.PrintWriter;
 import java.util.Iterator;
 
 public class TreasureKeyBehavior extends Behavior {
@@ -18,19 +19,21 @@ public class TreasureKeyBehavior extends Behavior {
     private BranchGroup rootBG;
     private Morph morph;
     private Alpha morphAlpha;
+    private PrintWriter out;
 
     public TreasureKeyBehavior(BranchGroup treasureBranchGroup,
                                TransformGroup treasureGroup,
                                Vector3d redBoxPos,
                                Vector3d blueBoxPos,
                                int playerId,
-                               BranchGroup rootBG) {
+                               BranchGroup rootBG, PrintWriter out) {
         this.treasureBranchGroup = treasureBranchGroup;
         this.treasureGroup = treasureGroup;
         this.redBoxPos = redBoxPos;
         this.blueBoxPos = blueBoxPos;
         this.playerId = playerId;
         this.rootBG = rootBG;
+        this.out = out;
     }
 
     public void updateRedPosition(Vector3d newPos) {
@@ -90,9 +93,11 @@ public class TreasureKeyBehavior extends Behavior {
             Vector3d diff = new Vector3d();
             diff.sub(treasurePos, playerPos);
 
-            if (diff.length() < TREASURE_INTERACT_DISTANCE) {
+            if (diff.length() < TREASURE_INTERACT_DISTANCE && !BasicScene.getGameEnded()) {
                 startMorphAnimation();
                 treasureIsCoin = false;
+                // Send game end message for treasure win.
+                out.println("GAME_END Blue");
             }
         }
     }

@@ -324,6 +324,11 @@ public class BasicServer {
                         broadcast("TREASURE_MORPH", this);
                         continue;
                     }
+                    // Handle game end messages.
+                    if (line.startsWith("GAME_END")) {
+                        broadcast(line, this);
+                        continue;
+                    }
                     // Handle ghost morph commands
                     if (line.startsWith("GREEN") || line.startsWith("BLUE")) {
                         broadcast(line, this);
