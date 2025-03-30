@@ -222,9 +222,6 @@ public class NPC {
         
         // Apply the transform to the rotation group
         rotationTG.setTransform(rotTransform);
-        
-        // Debug output to verify rotation is happening
-        System.out.println("NPC Direction: " + direction + ", Rotation angle: " + angle);
     }
 
     public Vector3d getDirection() {
