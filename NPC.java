@@ -13,7 +13,7 @@ public class NPC {
     // Model constants
     private static final double MODEL_SCALE = 0.05;
     private static final String MODEL_PATH = "src/ShapeShifters/assets/ghost.obj";
-    private static final double CHARACTER_HALF = 0.03; // Match this with GhostModel or adjust as needed
+    private static final double CHARACTER_HALF = 0.035; // Match this with GhostModel or adjust as needed
     
     // Transform hierarchy
     private TransformGroup positionTG; // Root TG - handles position only
@@ -21,11 +21,10 @@ public class NPC {
     
     private Vector3d position;
     private Vector3d direction;
-    private double step;
+    double step;
 
-    /**
-     * Interface for collision detection.
-     */
+    private GhostModel userGhost;
+
     public interface CollisionChecker {
         boolean collides(double x, double z);
     }
@@ -63,10 +62,7 @@ public class NPC {
         // Print debug info at creation
         System.out.println("NPC created with direction: " + direction);
     }
-    
-    /**
-     * Load the ghost model and apply green appearance
-     */
+
     private void loadGhostModel() {
         try {
             // Create ObjectFile loader
@@ -164,10 +160,7 @@ public class NPC {
         
         return scaleTG;
     }
-    
-    /**
-     * Apply appearance to all shapes in the model
-     */
+
     private void applyAppearanceToModel(Node node, Appearance appearance) {
         if (node instanceof Shape3D) {
             Shape3D shape = (Shape3D) node;
@@ -179,11 +172,8 @@ public class NPC {
             }
         }
     }
-    
-    /**
-     * Update rotation based on current direction
-     */
-    private void updateRotation() {
+
+    public void updateRotation() {
         // Create a fresh transform for rotation
         Transform3D rotTransform = new Transform3D();
         
@@ -245,6 +235,22 @@ public class NPC {
         return new Vector3d(position);
     }
 
+    public void bounce() {
+        // Reverse the direction vector
+        direction.scale(-1);
+        // Push back further than one step to prevent sticking
+        position.x += direction.x * step * 2;
+        position.z += direction.z * step * 2;
+        updateRotation();
+        Transform3D posTransform = new Transform3D();
+        posTransform.setTranslation(position);
+        positionTG.setTransform(posTransform);
+    }
+
+    public void setPosition(Vector3d newPos) {
+        this.position = new Vector3d(newPos);
+    }
+
     public TransformGroup getTransformGroup() {
         return positionTG; // Return the root transform group
     }
@@ -253,17 +259,24 @@ public class NPC {
         return CHARACTER_HALF;
     }
 
-    /**
-     * Update the NPC's position. Change direction if a collision occurs.
-     */
-    public void update(CollisionChecker checker) {
+    public void setDirection(Vector3d newDir) {
+        this.direction.set(newDir);
+        this.direction.normalize(); // Ensure consistent movement speed
+        updateRotation();
+    }
+
+    public double getStep() {
+        return this.step;
+    }
+
+    public void update(CollisionChecker checker, GhostModel userGhost) {
         // Calculate new position based on current direction
         double newX = position.x + direction.x * step;
         double newZ = position.z + direction.z * step;
 
         boolean directionChanged = false;
         
-        if (checker.collides(newX, newZ)) {
+        if (checker.collides(newX, newZ) || CollisionDetector.collidesWithUser(newX, newZ, NPC.getCharacterHalf(), userGhost)) {
             // Store old direction for comparison
             Vector3d oldDirection = new Vector3d(direction);
             

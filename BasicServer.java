@@ -10,6 +10,8 @@ import org.jogamp.java3d.Appearance;
 import org.jogamp.java3d.Material;
 import org.jogamp.vecmath.Color3f;
 import org.jogamp.vecmath.Vector3d;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
 
 public class BasicServer {
     private static final int PORT = 5001;
@@ -21,6 +23,8 @@ public class BasicServer {
     private static final int MAZE_HEIGHT = 20;
     private static final int MAZE_WIDTH = 20;
     private static String treasureMsg;
+    private static GhostModel userGhost;
+    private static Map<Integer, Vector3d> playerPositions = new ConcurrentHashMap<>();
 
     public static void main(String[] args) {
         // Print the server's IP address (hard-coded for testing)
@@ -102,10 +106,16 @@ public class BasicServer {
             npcs.add(npc);
         }
 
+        userGhost = new GhostModel(true, new Vector3d(0.0, 0.1, 0.0));
+
+        userGhost = new GhostModel(true, new Vector3d(0.0, 0.1, 0.0));
+
         // Periodically update NPC positions and broadcast their states.
         new Thread(() -> {
             while (true) {
+                // Update each NPC with wall collisions and player collisions
                 for (NPC npc : npcs) {
+                    // Existing wall collision check
                     npc.update((x, z) -> {
                         double half = 0.03;
                         double side = 2 * half;
@@ -124,8 +134,94 @@ public class BasicServer {
                             }
                         }
                         return false;
-                    });
+                    }, userGhost);
+
+                    // New: Check collisions with players
+                    Vector3d npcPos = npc.getPosition();
+                    double npcHalf = NPC.getCharacterHalf();
+                    for (Map.Entry<Integer, Vector3d> entry : playerPositions.entrySet()) {
+                        Vector3d playerPos = entry.getValue();
+                        double playerHalf = GhostModel.getCharacterHalf();
+
+                        if (CollisionDetector.isColliding(npcPos.x, npcPos.z, npcHalf,
+                                playerPos.x, playerPos.z, playerHalf)) {
+
+                            // Calculate push back direction (from NPC to player)
+                            Vector3d collisionNormal = new Vector3d(
+                                    npcPos.x - playerPos.x,
+                                    0,
+                                    npcPos.z - playerPos.z
+                            );
+                            collisionNormal.normalize();
+
+                            // Set a stronger bounce factor
+                            double bounceFactor = 1.5; // Adjust this value as needed
+
+                            // Calculate new position that pushes the NPC away
+                            Vector3d newNPCPos = new Vector3d(
+                                    npcPos.x + collisionNormal.x * npc.getStep() * bounceFactor,
+                                    0.1,
+                                    npcPos.z + collisionNormal.z * npc.getStep() * bounceFactor
+                            );
+
+                            // Reverse and slightly randomize direction
+                            Vector3d newDirection = new Vector3d(
+                                    -npc.getDirection().x + (Math.random() * 0.2 - 0.1),
+                                    0,
+                                    -npc.getDirection().z + (Math.random() * 0.2 - 0.1)
+                            );
+                            newDirection.normalize();
+
+                            npc.setDirection(newDirection);
+                            npc.setPosition(newNPCPos);
+
+                            // Debug logging (optional)
+                            System.out.println("NPC collided with player " + entry.getKey() +
+                                    " - New NPC pos: " + newNPCPos + " New direction: " + newDirection);
+                        }
+                    }
                 }
+
+                // Existing NPC-NPC collision check
+                for (int i = 0; i < npcs.size(); i++) {
+                    for (int j = i + 1; j < npcs.size(); j++) {
+                        NPC npc1 = npcs.get(i);
+                        NPC npc2 = npcs.get(j);
+                        Vector3d pos1 = npc1.getPosition();
+                        Vector3d pos2 = npc2.getPosition();
+
+                        if (CollisionDetector.isColliding(pos1.x, pos1.z, NPC.getCharacterHalf(),
+                                pos2.x, pos2.z, NPC.getCharacterHalf())) {
+
+                            // Calculate push back direction
+                            Vector3d dir1To2 = new Vector3d();
+                            dir1To2.sub(pos2, pos1);
+                            dir1To2.normalize();
+
+                            // Adjust positions
+                            Vector3d newPos1 = new Vector3d(
+                                    pos1.x - dir1To2.x * npc1.getStep(),
+                                    0.1,
+                                    pos1.z - dir1To2.z * npc1.getStep()
+                            );
+
+                            Vector3d newPos2 = new Vector3d(
+                                    pos2.x + dir1To2.x * npc2.getStep(),
+                                    0.1,
+                                    pos2.z + dir1To2.z * npc2.getStep()
+                            );
+
+                            // Reverse directions
+                            npc1.setDirection(new Vector3d(-npc1.getDirection().x, 0, -npc1.getDirection().z));
+                            npc2.setDirection(new Vector3d(-npc2.getDirection().x, 0, -npc2.getDirection().z));
+
+                            // Update positions
+                            npc1.setPosition(newPos1);
+                            npc2.setPosition(newPos2);
+                        }
+                    }
+                }
+
                 broadcastNPCPositions();
                 try {
                     Thread.sleep(50);
@@ -228,7 +324,7 @@ public class BasicServer {
                         broadcast("TREASURE_MORPH", this);
                         continue;
                     }
-                    // Handle ghost morph commands (e.g., "GREEN" or "BLUE") and any other commands.
+                    // Handle ghost morph commands
                     if (line.startsWith("GREEN") || line.startsWith("BLUE")) {
                         broadcast(line, this);
                         continue;
@@ -237,10 +333,23 @@ public class BasicServer {
                     String[] tokens = line.split(" ");
                     if (tokens.length < 4)
                         continue;
+
+                    // Update player position in the map
+                    int id = Integer.parseInt(tokens[0]);
+                    double x = Double.parseDouble(tokens[1]);
+                    double y = Double.parseDouble(tokens[2]);
+                    double z = Double.parseDouble(tokens[3]);
+                    playerPositions.put(id, new Vector3d(x, y, z));
+
                     broadcast(line, this);
                 }
             } catch (IOException e) {
                 e.printStackTrace();
+            } finally {
+                playerPositions.remove(playerId);
+                try {
+                    socket.close();
+                } catch (IOException e) { /* Ignore */ }
             }
         }
     }

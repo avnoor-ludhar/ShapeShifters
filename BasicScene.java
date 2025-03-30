@@ -37,7 +37,7 @@ public class BasicScene extends JPanel implements MouseListener {
     private PickTool bluePickTool;
     private AppearanceCycleBehavior blueGhostCycle;
     // Player positions (x, y, z) – y remains constant at 0.1.
-    private Vector3d redBoxPos = new Vector3d(0.0, 0.1, 0.0);
+    private Vector3d redBoxPos = new Vector3d(0.3, 0.1, 0.0);
     private Vector3d blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
     private final double STEP = 0.010;
 
@@ -239,10 +239,10 @@ public class BasicScene extends JPanel implements MouseListener {
                             double dirZ = Double.parseDouble(tokens[i + 5]); // Direction Z
                             
                             NPC npc = npcs.get(npcId);
-                            
-                            // Update position
+                            Vector3d newPos = new Vector3d(x, y, z);
+                            npc.setPosition(newPos);
                             Transform3D transform = new Transform3D();
-                            transform.setTranslation(new Vector3d(x, y, z));
+                            transform.setTranslation(newPos);
                             npc.getTransformGroup().setTransform(transform);
                             
                             // Update direction and rotation
@@ -757,14 +757,8 @@ public class BasicScene extends JPanel implements MouseListener {
     }
 
     private void updateMovement() {
-        //first try both x and z, then x, then z. If any of them happen then return
-        double dx = 0;
-        double dz = 0;
-        double oldX, oldZ, newX, newZ;
-        oldX = 0;
-        oldZ = 0;
-        newX = 0;
-        newZ = 0;
+        double dx = 0, dz = 0;
+        double oldX, oldZ, newX = 0, newZ = 0;
         if (playerId == 1) {
             oldX = redBoxPos.x;
             oldZ = redBoxPos.z;
@@ -774,21 +768,20 @@ public class BasicScene extends JPanel implements MouseListener {
         }
 
         int direction = -1;
-        boolean[][] combos = {{true, true}, {true, false}, {false, true}, {false, false}};
-        for (boolean[] combo: combos) {
-            boolean changeX = combo[0];
-            boolean changeZ = combo[1];
+        // Get the movement step from the corresponding ghost.
+        double step = (playerId == 1) ? redGhost.step : blueGhost.step;
+        boolean moved = false;
+
+        // Try various combinations: first change both axes, then only one axis.
+        boolean[][] combos = { {true, true}, {true, false}, {false, true}, {false, false} };
+        for (boolean[] combo : combos) {
+            boolean changeX = combo[0], changeZ = combo[1];
             dx = 0;
             dz = 0;
             newX = oldX;
             newZ = oldZ;
-            direction = -1; // Track which direction we're moving
-            double step;
-            if (playerId == 1) {
-                step = redGhost.step;
-            } else {
-                step = blueGhost.step;
-            }
+            direction = -1;
+            // Apply key inputs conditionally.
             if (upPressed && changeZ) {
                 dz -= step;
                 direction = GhostModel.DIRECTION_UP;
@@ -806,14 +799,11 @@ public class BasicScene extends JPanel implements MouseListener {
                 direction = GhostModel.DIRECTION_RIGHT;
             }
 
-            // Normalize diagonal movement to keep speed consistent.
+            // Normalize diagonal movement.
             if (dx != 0 || dz != 0) {
                 double length = Math.sqrt(dx * dx + dz * dz);
                 dx = dx / length * step;
                 dz = dz / length * step;
-
-                // For diagonal movement, prioritize the last key pressed
-                // If multiple keys are pressed simultaneously, we'll use the horizontal direction
                 if (dx != 0 && dz != 0) {
                     if (dx < 0 && dz > 0) {
                         direction = GhostModel.DIRECTION_DOWNLEFT;
@@ -826,49 +816,79 @@ public class BasicScene extends JPanel implements MouseListener {
                     }
                 }
             } else {
-                // If no keys are pressed, return without updating
+                // No movement if no key pressed.
                 return;
             }
 
             newX += dx;
             newZ += dz;
-            if (collidesWithWall(newX, newZ)) {
-                continue;
-            } else {
+            // If the new position doesn't collide with a wall, accept this move.
+            if (!collidesWithWall(newX, newZ)) {
+                moved = true;
                 break;
             }
         }
 
-        if (!collidesWithWall(newX, newZ)) {
-            if (playerId == 1) {
-                redBoxPos.x = newX;
-                redBoxPos.z = newZ;
-                treasureKeyBehavior.updateRedPosition(redBoxPos);
-                redGhost.updatePositionAndRotation(newX, newZ, direction);
-            } else {
-                blueBoxPos.x = newX;
-                blueBoxPos.z = newZ;
-                treasureKeyBehavior.updateBluePosition(blueBoxPos);
-                blueGhost.updatePositionAndRotation(newX, newZ, direction);
-            }
-
-            if (out != null) {
-                out.println(playerId + " " + newX + " " + 0.1 + " " + newZ + " " + direction);
-            }
-
-            updateCamera();
-            updateSpotlight();
-            if ((dx != 0 || dz != 0) && (System.currentTimeMillis() - lastFootstepTime > FOOTSTEP_COOLDOWN)) {
-                playFootstepSound();
-                lastFootstepTime = System.currentTimeMillis();
-            }
-        } else {
+        if (!moved) {
+            // If no valid movement, play collision sound and exit.
             if (System.currentTimeMillis() - lastCollisionTime > COLLISION_COOLDOWN) {
                 playWallCollisionSound();
                 lastCollisionTime = System.currentTimeMillis();
             }
+            return;
+        }
+
+        // Check for collisions with NPCs.
+        for (NPC npc : npcs) {
+            Vector3d npcPos = npc.getPosition();
+            if (CollisionDetector.isColliding(
+                    newX, newZ, GhostModel.getCharacterHalf(),
+                    npcPos.x, npcPos.z, NPC.getCharacterHalf())) {
+                if (System.currentTimeMillis() - lastCollisionTime > COLLISION_COOLDOWN) {
+                    playWallCollisionSound();
+                    lastCollisionTime = System.currentTimeMillis();
+                }
+                return;
+            }
+        }
+
+        // Check for collisions with the other player.
+        Vector3d otherPlayerPos = (playerId == 1) ? blueBoxPos : redBoxPos;
+        if (CollisionDetector.isColliding(
+                newX, newZ, GhostModel.getCharacterHalf(),
+                otherPlayerPos.x, otherPlayerPos.z, GhostModel.getCharacterHalf())) {
+            if (System.currentTimeMillis() - lastCollisionTime > COLLISION_COOLDOWN) {
+                playWallCollisionSound();
+                lastCollisionTime = System.currentTimeMillis();
+            }
+            return;
+        }
+
+        // Update position if no collisions occurred.
+        if (playerId == 1) {
+            redBoxPos.x = newX;
+            redBoxPos.z = newZ;
+            treasureKeyBehavior.updateRedPosition(redBoxPos);
+            redGhost.updatePositionAndRotation(newX, newZ, direction);
+        } else {
+            blueBoxPos.x = newX;
+            blueBoxPos.z = newZ;
+            treasureKeyBehavior.updateBluePosition(blueBoxPos);
+            blueGhost.updatePositionAndRotation(newX, newZ, direction);
+        }
+
+        if (out != null) {
+            out.println(playerId + " " + newX + " " + 0.1 + " " + newZ + " " + direction);
+        }
+
+        updateCamera();
+        updateSpotlight();
+        if ((dx != 0 || dz != 0) && (System.currentTimeMillis() - lastFootstepTime > FOOTSTEP_COOLDOWN)) {
+            playFootstepSound();
+            lastFootstepTime = System.currentTimeMillis();
         }
     }
+
 
     private void updateCamera() {
         if(gameEnded) return;
