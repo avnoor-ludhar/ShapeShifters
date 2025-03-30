@@ -1013,7 +1013,7 @@ public class BasicScene extends JPanel implements MouseListener {
         // Create only the North West sign with "The Maze" text
         mazeSign = new MazeSign(
             new Vector3d(-cornerX, signHeight, -cornerZ),
-            "The Maze"
+            "ShapeShifters"
         );
 
         // Add the sign to the scene
