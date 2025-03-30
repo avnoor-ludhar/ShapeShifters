@@ -457,8 +457,8 @@ public class BasicScene extends JPanel implements MouseListener {
         // Ends of the middle box (small boxes spinning fast)
         float offset = 0.3f; // match middleBox width
 
-
-
+        // Create LOD versions of the fan blades
+        // Load the models separately for left and right (to avoid sharing nodes)
         ObjectFile f = new ObjectFile(ObjectFile.RESIZE, (float) (60 * Math.PI / 180.0));
         Scene s1 = null;
         Scene s2 = null;
@@ -469,52 +469,88 @@ public class BasicScene extends JPanel implements MouseListener {
         if (s1 == null || s2 == null) {
             System.exit(1); //this won't happen dw
         }
-        BranchGroup b1 = s1.getSceneGroup();
-        BranchGroup b2 = s2.getSceneGroup();
-
+        
+        // LEFT FAN BLADE
+        // Create high detail version for left fan
         TransformGroup tg1 = new TransformGroup();
-        tg1.addChild(b1);
+        tg1.addChild(s1.getSceneGroup());
         Transform3D transform1 = new Transform3D();
         transform1.rotY(Math.PI/2);
         transform1.setScale(.1);
         tg1.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
         tg1.setTransform(transform1);
-
+        
+        // Create a low detail version (small box) for the left fan blade
+        TransformGroup lowDetailLeftTG = new TransformGroup();
+        Appearance fanAppearance = new Appearance();
+        Material fanMaterial = new Material(
+                new Color3f(0.8f, 0.8f, 0.8f),   // Ambient
+                new Color3f(0.1f, 0.1f, 0.1f),   // Emissive
+                new Color3f(0.8f, 0.8f, 0.8f),   // Diffuse
+                new Color3f(1.0f, 1.0f, 1.0f),   // Specular
+                64.0f                            // Shininess
+        );
+        fanAppearance.setMaterial(fanMaterial);
+        Box lowDetailFan = new Box(0.01f, 0.01f, 0.01f, Box.GENERATE_NORMALS, fanAppearance);
+        lowDetailLeftTG.addChild(lowDetailFan);
+        
+        // Create empty medium detail node - we'll just use two levels
+        TransformGroup emptyLeftTG = new TransformGroup();
+        Box emptyBox = new Box(0.001f, 0.001f, 0.001f, Box.GENERATE_NORMALS, fanAppearance);
+        emptyLeftTG.addChild(emptyBox);
+        
+        // Create LOD for left fan blade
+        double[] fanDistances = {2.3, 2.4, 100.0}; // Almost immediate transition
+        BranchGroup leftFanLODBG = LODHelper.createLOD(tg1, emptyLeftTG, lowDetailLeftTG, fanDistances);
+        
+        // RIGHT FAN BLADE
+        // Create high detail version for right fan (using separate model instance)
         TransformGroup tg2 = new TransformGroup();
-        tg2.addChild(b2);
+        tg2.addChild(s2.getSceneGroup());
         Transform3D transform2 = new Transform3D();
         transform2.rotY(Math.PI/2);
         transform2.setScale(.1);
         tg2.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
         tg2.setTransform(transform2);
+        
+        // Create a low detail version for the right fan blade
+        TransformGroup lowDetailRightTG = new TransformGroup();
+        Box lowDetailFanRight = new Box(0.01f, 0.01f, 0.01f, Box.GENERATE_NORMALS, fanAppearance);
+        lowDetailRightTG.addChild(lowDetailFanRight);
+        
+        // Create empty medium detail node - we'll just use two levels
+        TransformGroup emptyRightTG = new TransformGroup();
+        Box emptyRightBox = new Box(0.001f, 0.001f, 0.001f, Box.GENERATE_NORMALS, fanAppearance);
+        emptyRightTG.addChild(emptyRightBox);
+        
+        // Create LOD for right fan blade (using same distances)
+        BranchGroup rightFanLODBG = LODHelper.createLOD(tg2, emptyRightTG, lowDetailRightTG, fanDistances);
 
-
-//        Box endBoxLeft = new Box(0.005f, 0.01f, 0.05f, null);
+        // Add fan blades to the spinning transforms
         TransformGroup spinLeft = createSpinner(200, 'z'); // faster spin
-
         Transform3D leftTrans = new Transform3D();
         leftTrans.setTranslation(new Vector3f(-offset, 0f, 0f));
         TransformGroup leftTG = new TransformGroup(leftTrans);
-        leftTG.addChild(tg1);
+        leftTG.addChild(leftFanLODBG);
         spinLeft.addChild(leftTG);
         midBoxTG.addChild(spinLeft); // attach to midBoxTG so it spins with it
 
-
-
-
-//        Box endBoxRight = new Box(0.01f, 0.01f, 0.05f, null);
         TransformGroup spinRight = createSpinner(200, 'z');
-
         Transform3D rightTrans = new Transform3D();
         rightTrans.setTranslation(new Vector3f(offset, 0f, 0f));
         TransformGroup rightTG = new TransformGroup(rightTrans);
-        rightTG.addChild(tg2);
+        rightTG.addChild(rightFanLODBG);
         spinRight.addChild(rightTG);
         midBoxTG.addChild(spinRight);
 
         this.rootBG = sceneBG;
         rootBG.setCapability(BranchGroup.ALLOW_CHILDREN_EXTEND);
         rootBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
+
+        // When creating the fan components, add user data to identify them:
+        
+        leftFanLODBG.setUserData("fan-left");
+        rightFanLODBG.setUserData("fan-right");
 
         sceneBG.compile();
         return sceneBG;
@@ -837,6 +873,9 @@ public class BasicScene extends JPanel implements MouseListener {
         viewTransform.lookAt(eye, center, up);
         viewTransform.invert();
         universe.getViewingPlatform().getViewPlatformTransform().setTransform(viewTransform);
+        
+        // Update fan blade LOD positions
+        updateFanLODPositions();
     }
 
     private void updateSpotlight() {
@@ -847,6 +886,61 @@ public class BasicScene extends JPanel implements MouseListener {
         spotlightTG.setTransform(spotlightTransform);
     }
 
+    /**
+     * Updates the LOD positions for fan blades based on player position
+     */
+    private void updateFanLODPositions() {
+        // Get the player position based on playerId
+        Vector3d playerPos = (playerId == 1) ? redBoxPos : blueBoxPos;
+        
+        // Calculate the position of the fan (at center with cylinder)
+        Vector3d fanPosition = new Vector3d(0.03, 0.1, 0.03);
+        
+        // Find only fan-related DistanceLOD behaviors and update them
+        // We need to be more specific about which LODs we're updating
+        if (rootBG != null) {
+            // Look for fan LOD behaviors specifically
+            // These will be in the midBoxTG hierarchy
+            for (int i = 0; i < rootBG.numChildren(); i++) {
+                Node child = rootBG.getChild(i);
+                if (child instanceof TransformGroup) {
+                    TransformGroup tg = (TransformGroup)child;
+                    // Only look for fan LODs - you might need to add 
+                    // some kind of identifier to find these specifically
+                    if (isFanComponent(tg)) {
+                        updateFanLODInGroup(tg, playerPos);
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * Checks if a node is part of the fan structure
+     */
+    private boolean isFanComponent(Node node) {
+        // This is a simplification - you'll need to adapt this
+        // to identify your fan components specifically
+        // One approach is to check if the node contains a specific UserData
+        return node.getUserData() != null && 
+               node.getUserData().toString().contains("fan");
+    }
+    
+    /**
+     * Updates LOD positions specifically for fan components
+     */
+    private void updateFanLODInGroup(Node node, Vector3d viewerPosition) {
+        if (node instanceof DistanceLOD) {
+            // Update the LOD's position
+            LODHelper.updateLODPosition((DistanceLOD) node, viewerPosition);
+        } else if (node instanceof Group) {
+            Group group = (Group) node;
+            // Search all children
+            for (int i = 0; i < group.numChildren(); i++) {
+                updateFanLODInGroup(group.getChild(i), viewerPosition);
+            }
+        }
+    }
 
     private boolean collidesWithWall(double x, double z) {
         double half = GhostModel.getCharacterHalf();
