@@ -61,6 +61,8 @@ public class NPC {
             // Load the model
             Scene modelScene = loader.load(MODEL_PATH);
             BranchGroup modelBG = modelScene.getSceneGroup();
+            modelBG.setCapability(BranchGroup.ALLOW_PICKABLE_READ);
+
             
             // Create green appearance
             Appearance greenAppearance = new Appearance();
@@ -83,8 +85,19 @@ public class NPC {
             TransformGroup modelScaleTG = new TransformGroup(modelScale);
             modelScaleTG.addChild(modelBG);
 
-            // Add the scaled model to the rotation group
-            rotationTG.addChild(modelScaleTG);
+            // Create simplified models for LOD that match the ghost dimensions
+            Node mediumDetailNode = createSimplifiedGhost(greenAppearance, 0.8);
+            Node lowDetailNode = createSimplifiedGhost(greenAppearance, 0.6);
+            
+            // Set appropriate LOD distances - not too close, not too far
+            // Switch to medium detail at 1.0 units, low detail at 2.0 units
+            double[] distances = {1.0, 1.5, 2.0};
+            
+            // Create LOD node with all detail levels
+            BranchGroup lodBG = LODHelper.createLOD(modelScaleTG, mediumDetailNode, lowDetailNode, distances);
+            
+            // Add the LOD setup to the rotation group
+            rotationTG.addChild(lodBG);
             
         } catch (Exception e) {
             System.err.println("Error loading ghost model: " + e.getMessage());
@@ -101,6 +114,34 @@ public class NPC {
             Box npcBox = new Box(0.03f, 0.03f, 0.03f, Box.GENERATE_NORMALS, greenAppearance);
             rotationTG.addChild(npcBox);
         }
+    }
+    
+    /**
+     * Create a simplified ghost model with the proper dimensions
+     * 
+     * @param appearance The appearance to apply to the model
+     * @param scaleFactor Scale factor for the model (relative to full detail)
+     * @return A Node containing the simplified ghost
+     */
+    private Node createSimplifiedGhost(Appearance appearance, double scaleFactor) {
+        // Create a box similar to the ghost size
+        // Use a smaller box - CHARACTER_HALF is 0.03, GhostModel uses 0.02
+        // This will make the box similar in size to the ghost model
+        float boxSize = 0.025f;
+        
+        TransformGroup tg = new TransformGroup();
+        
+        // Create a box with the ghost's green color
+        Box box = new Box(boxSize, boxSize, boxSize, Box.GENERATE_NORMALS, appearance);
+        tg.addChild(box);
+        
+        // Apply the scale factor
+        Transform3D transform = new Transform3D();
+        transform.setScale(scaleFactor);
+        TransformGroup scaleTG = new TransformGroup(transform);
+        scaleTG.addChild(tg);
+        
+        return scaleTG;
     }
 
     private void applyAppearanceToModel(Node node, Appearance appearance) {
@@ -229,6 +270,36 @@ public class NPC {
         Transform3D posTransform = new Transform3D();
         posTransform.setTranslation(position);
         positionTG.setTransform(posTransform);
+        
+        // Update LOD position for LOD behavior - get all DistanceLOD behaviors
+        // from the scene graph and update their positions
+        updateLODPositions();
+    }
+
+    /**
+     * Updates the position of all LOD behaviors in this NPC
+     */
+    private void updateLODPositions() {
+        // Search for DistanceLOD behaviors in the scene graph
+        if (rotationTG != null) {
+            updateLODPositionsInGroup(rotationTG);
+        }
+    }
+    
+    /**
+     * Recursively search for DistanceLOD behaviors in the scene graph
+     */
+    private void updateLODPositionsInGroup(Node node) {
+        if (node instanceof DistanceLOD) {
+            // Update the position of the LOD behavior
+            LODHelper.updateLODPosition((DistanceLOD) node, position);
+        } else if (node instanceof Group) {
+            Group group = (Group) node;
+            // Search all children
+            for (int i = 0; i < group.numChildren(); i++) {
+                updateLODPositionsInGroup(group.getChild(i));
+            }
+        }
     }
 
     // Helper method to randomize direction when collision occurs

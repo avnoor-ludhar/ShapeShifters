@@ -5,10 +5,11 @@ import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.*;
+import java.util.Random;
 import org.jogamp.java3d.Appearance;
 import org.jogamp.java3d.Material;
-import org.jogamp.vecmath.*;
+import org.jogamp.vecmath.Color3f;
+import org.jogamp.vecmath.Vector3d;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
@@ -26,18 +27,27 @@ public class BasicServer {
     private static Map<Integer, Vector3d> playerPositions = new ConcurrentHashMap<>();
 
     public static void main(String[] args) {
+        // Print the server's IP address (hard-coded for testing)
+        try {
+            InetAddress localHost = InetAddress.getLocalHost();
+            String serverIP = "10.72.47.254";
+            System.out.println("Server IP address: " + serverIP);
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        }
+
         // Initialize maze and designate moving walls.
         maze = GenerateMaze.getMaze(20, 20);
         // Clear a central area of the maze.
-        for (int i = 7; i < 13; i++) {
-            for (int j = 7; j < 13; j++) {
+        for (int i = 9; i < 12; i++) {
+            for (int j = 9; j < 12; j++) {
                 maze.get(i).set(j, 0);
             }
         }
         // Randomly remove 10% of walls.
         for (int i = 1; i < MAZE_HEIGHT - 1; i++) {
             for (int j = 1; j < MAZE_WIDTH - 1; j++) {
-                if (Math.random() < 0.1) {
+                if (Math.random() < 0.2) {
                     maze.get(i).set(j, 0);
                 }
             }
@@ -53,6 +63,7 @@ public class BasicServer {
                 for (int n = 0; n < movingWallsIndex; n++) {
                     if (movingWalls[n][0] == i && movingWalls[n][1] == j) {
                         found = true;
+                        break;
                     }
                 }
                 if (!found) {
@@ -91,14 +102,15 @@ public class BasicServer {
         for (int i = 0; i < npcCount; i++) {
             if (validPositions.isEmpty())
                 break;
-            // Note: Adjusted NPC movement step (0.005) as per group changes.
             NPC npc = NPC.generateRandomNPC(validPositions, npcAppearance, 0.005);
             npcs.add(npc);
         }
 
         userGhost = new GhostModel(true, new Vector3d(0.0, 0.1, 0.0));
 
-        // Update NPC positions periodically and broadcast their states.
+        userGhost = new GhostModel(true, new Vector3d(0.0, 0.1, 0.0));
+
+        // Periodically update NPC positions and broadcast their states.
         new Thread(() -> {
             while (true) {
                 // Update each NPC with wall collisions and player collisions
@@ -239,7 +251,7 @@ public class BasicServer {
         }
     }
 
-    // Broadcast a message to all connected clients.
+    // Updated broadcast method: sends the message to all clients.
     public static synchronized void broadcast(String message, ClientHandler sender) {
         for (ClientHandler client : clients) {
             client.sendMessage(message);
@@ -276,11 +288,9 @@ public class BasicServer {
                 out.println("NPC_COUNT " + npcs.size());
                 for (NPC npc : npcs) {
                     Vector3d pos = npc.getPosition();
-                    Vector3d dir = npc.getDirection();
-                    out.println("NPC_INIT " + pos.x + " " + pos.z + " " + dir.x + " " + dir.z);
+                    out.println("NPC_INIT " + pos.x + " " + pos.z + " 0 0");
                 }
-
-                // Send treasure coordinates.
+                // Send treasure information.
                 out.println(treasureMsg);
             } catch (IOException e) {
                 e.printStackTrace();
@@ -293,20 +303,24 @@ public class BasicServer {
 
         @Override
         public void run() {
-            String inputLine;
+            String line;
             try {
-                while ((inputLine = in.readLine()) != null) {
-                    System.out.println("Received from player " + playerId + ": " + inputLine);
-                    // Parse player position update
-                    String[] parts = inputLine.split(" ");
-                    if (parts.length >= 4) {
-                        int id = Integer.parseInt(parts[0]);
-                        double x = Double.parseDouble(parts[1]);
-                        double z = Double.parseDouble(parts[3]); // y is fixed at 0.1
-                        Vector3d pos = new Vector3d(x, 0.1, z);
-                        playerPositions.put(id, pos);
+                while ((line = in.readLine()) != null) {
+                    // Handle treasure activation.
+                    if (line.startsWith("TREASURE_ACTIVATE")) {
+                        broadcast("TREASURE_MORPH", this);
+                        continue;
                     }
-                    broadcast(inputLine, this);
+                    // Handle ghost morph commands (e.g., "GREEN" or "BLUE") and any other commands.
+                    if (line.startsWith("GREEN") || line.startsWith("BLUE")) {
+                        broadcast(line, this);
+                        continue;
+                    }
+                    // Process regular player position updates.
+                    String[] tokens = line.split(" ");
+                    if (tokens.length < 4)
+                        continue;
+                    broadcast(line, this);
                 }
             } catch (IOException e) {
                 e.printStackTrace();

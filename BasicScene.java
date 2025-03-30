@@ -20,6 +20,7 @@ import org.jogamp.java3d.utils.geometry.Box;
 import org.jogamp.java3d.utils.geometry.Primitive;
 import org.jogamp.java3d.utils.geometry.Cylinder;
 import org.jogamp.java3d.utils.image.TextureLoader;
+import org.jogamp.java3d.utils.picking.PickResult;
 import org.jogamp.java3d.utils.picking.PickTool;
 import org.jogamp.java3d.utils.universe.SimpleUniverse;
 import org.jogamp.vecmath.*;
@@ -32,11 +33,14 @@ public class BasicScene extends JPanel implements MouseListener {
     private GhostModel redGhost;
     private GhostModel blueGhost;
     private Canvas3D canvas;
-    private PickTool pickTool;
+    private PickTool redPickTool;
+    private PickTool bluePickTool;
+    private AppearanceCycleBehavior blueGhostCycle;
     // Player positions (x, y, z) – y remains constant at 0.1.
     private Vector3d redBoxPos = new Vector3d(0.3, 0.1, 0.0);
     private Vector3d blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
     private final double STEP = 0.010;
+
 
     // Maze collision data
     private HashMap<Rectangle2D.Double, Point> wallBounds = new HashMap<>();
@@ -108,12 +112,26 @@ public class BasicScene extends JPanel implements MouseListener {
     // Add these field declarations to the class
     private MazeSign mazeSign; // Renamed to be more generic since we only have one sign
 
+    private static boolean gameEnded = false;
+
     // --- Constructors ---
     public BasicScene() {
         this("localhost", "Player");
     }
 
+    private void updateAppearance(Node node, Appearance app) {
+        if (node instanceof Shape3D) {
+//            ((Shape3D)node).setCapability(Shape3D.ALLOW_APPEARANCE_WRITE);
+            ((Shape3D) node).setAppearance(app);
+        } else if (node instanceof Group) {
+            Group group = (Group) node;
+            for (int i = 0; i < group.numChildren(); i++) {
+                updateAppearance(group.getChild(i), app);
+            }
+        }
+    }
     public BasicScene(String ipAddress, String username) {
+
         this.ipAddress = ipAddress;
         this.username = username;
         try {
@@ -126,7 +144,6 @@ public class BasicScene extends JPanel implements MouseListener {
                 playerId = Integer.parseInt(idLine.substring(3).trim());
                 System.out.println("Assigned player ID: " + playerId);
             }
-
             String mazeStr = in.readLine();
             int index = 0;
             if (mazeStr != null) {
@@ -193,6 +210,24 @@ public class BasicScene extends JPanel implements MouseListener {
             String line;
             try {
                 while ((line = in.readLine()) != null) {
+                    if (line != null && line.startsWith("GREEN")) {
+//                        System.out.println("HELLO WROLD");
+                        updateAppearance(blueGhost.getTransformGroup(), blueGhostCycle.newAppearance);
+                    }
+                    if (line != null && line.startsWith("BLUE")) {
+//                        System.out.println("HELASDCASDCASD");
+                        updateAppearance(blueGhost.getTransformGroup(), blueGhostCycle.originalAppearance);
+                    }
+
+                    // New: Handle treasure morph broadcast
+                    if (line.startsWith("TREASURE_MORPH")) {
+                        if (treasureKeyBehavior != null) {
+                            treasureKeyBehavior.startMorphAnimation();
+                            System.out.println("TREASURE_MORPH activated.");
+                        }
+                        continue;
+                    }
+                    // Handle NPC update messages.
                     if (line.startsWith("NPC_UPDATE")) {
                         String[] tokens = line.split(" ");
                         for (int i = 1; i < tokens.length; i += 4) {
@@ -209,6 +244,7 @@ public class BasicScene extends JPanel implements MouseListener {
                         }
                         continue;
                     }
+                    // Process regular player position updates.
                     String[] tokens = line.split(" ");
                     if (tokens.length < 4)
                         continue;
@@ -216,22 +252,36 @@ public class BasicScene extends JPanel implements MouseListener {
                     double x = Double.parseDouble(tokens[1]);
                     double y = Double.parseDouble(tokens[2]);
                     double z = Double.parseDouble(tokens[3]);
-
                     int direction = GhostModel.DIRECTION_DOWN;
                     if (tokens.length >= 5) {
                         direction = Integer.parseInt(tokens[4]);
                     }
-
                     if (id == 1 && redGhost != null) {
+                        redBoxPos.x = x;
+                        redBoxPos.z = z;
                         redGhost.updatePositionAndRotation(x, z, direction);
+
+                        if (this.universe != null) {
+                            updateCamera();
+                            updateSpotlight();
+
+                        }
                     } else if (id == 2 && blueGhost != null) {
+                        blueBoxPos.x = x;
+                        blueBoxPos.z = z;
                         blueGhost.updatePositionAndRotation(x, z, direction);
+                        if (this.universe != null) {
+                            updateCamera();
+                            updateSpotlight();
+                        }
                     }
                 }
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }).start();
+
+
     }
 
     // --- Scene Creation ---
@@ -253,7 +303,7 @@ public class BasicScene extends JPanel implements MouseListener {
                 new Color3f(1.0f, 1.0f, 1.0f),  // Specular color
                 64.0f));  // Shininess
 
-        String floorTexturePath = "src/Shapeshifters/Textures/QuartzFloorTexture.jpg";
+        String floorTexturePath = "src/ShapeShifters/Textures/QuartzFloorTexture.jpg";
         try {
             URL floorTextureURL = new File(floorTexturePath).toURI().toURL();
             Texture floorTexture = new TextureLoader(floorTextureURL, "RGB", new java.awt.Container()).getTexture();
@@ -276,6 +326,17 @@ public class BasicScene extends JPanel implements MouseListener {
 
         // Add four corner signs
         createMazeSigns(sceneBG);
+        if (playerId == 1) {
+            Point2f redPosn = getUnfilledPosn();
+            redBoxPos.x = redPosn.getX();
+            redBoxPos.z = redPosn.getY(); //second one is z, ignore the "Y"
+            out.println(playerId + " " + redBoxPos.x + " " + 0.1 + " " + redBoxPos.z + " " + GhostModel.DIRECTION_DOWN);
+        } else {
+            Point2f bluePosn = getUnfilledPosn();
+            blueBoxPos.x = bluePosn.getX();
+            blueBoxPos.z = bluePosn.getY();
+            out.println(playerId + " " + blueBoxPos.x + " " + 0.1 + " " + blueBoxPos.x + " " + GhostModel.DIRECTION_DOWN);
+        }
 
         redGhost = new GhostModel(true, redBoxPos);
         blueGhost = new GhostModel(false, blueBoxPos);
@@ -309,18 +370,14 @@ public class BasicScene extends JPanel implements MouseListener {
         directionalLight.setInfluencingBounds(bounds);
         sceneBG.addChild(directionalLight);
 
-        for (int i = 5; i < 15; i++) {
-            for (int j = 5; j < 15; j++) {
-                walls[i][j] = 0;
-            }
-        }
+
         for (int i = 0; i < MAZE_HEIGHT; i++) {
             for (int j = 0; j < MAZE_WIDTH; j++) {
                 if (walls[i][j] == 1) {
                     TransformGroup tg = addWall(sceneBG,
                             -1 + i * 0.103f, 0.1f, -1 + j * 0.103f,
                             0.055f, 0.05f, 0.055f,
-                            wallAppearance, i, j);
+                            wallAppearance, i, j, true);
                     if (movingWalls.contains(new Point(i, j))) {
                         tg.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
                         tg.setCapability(TransformGroup.ALLOW_TRANSFORM_READ);
@@ -336,9 +393,26 @@ public class BasicScene extends JPanel implements MouseListener {
             }
         }
 
-        for (NPC npc : npcs) {
-            sceneBG.addChild(npc.getTransformGroup());
+
+        BranchGroup npcBG = new BranchGroup();
+        npcBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
+        for (NPC npc: npcs) {
+            npcBG.addChild(npc.getTransformGroup());
         }
+      
+        for (int i = 9; i < 12; i++) {
+            for (int j = 9; j < 12; j++) {
+                addWall(sceneBG,
+                        -1 + i * 0.103f, 0.1f, -1 + j * 0.103f,
+                        0.055f, 0.05f, 0.055f,
+                        wallAppearance, i, j, false);
+            }
+        }
+
+        bluePickTool = new PickTool(npcBG);
+        bluePickTool.setMode(PickTool.BOUNDS);
+        sceneBG.addChild(npcBG);
+
 
 
         if (treasureBranchGroup != null) {
@@ -357,13 +431,15 @@ public class BasicScene extends JPanel implements MouseListener {
         blueGhostBranch.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
         blueGhostBranch.addChild(blueGhostTransform);
         sceneBG.addChild(blueGhostBranch);
-        pickTool = new PickTool(blueGhostBranch);                 // initialize 'pickTool' and allow 'cubeBG' pickable
-        pickTool.setMode(PickTool.BOUNDS);
+        redPickTool = new PickTool(blueGhostBranch);                 // initialize 'redPickTool' and allow 'cubeBG' pickable
+        redPickTool.setMode(PickTool.BOUNDS);
+
+
 
         Cylinder base = new Cylinder(0.1f, .2f);
         Transform3D baseTransform = new Transform3D();
-        baseTransform.setTranslation(new Vector3f(.3f, 0.1f, .3f)); // upright
-        baseTransform.setScale(.6f);
+        baseTransform.setTranslation(new Vector3f(.03f, 0.1f, .03f)); // upright
+        baseTransform.setScale(.45f);
         TransformGroup baseTG = new TransformGroup();
         baseTG.setTransform(baseTransform);
         baseTG.addChild(base);
@@ -383,8 +459,8 @@ public class BasicScene extends JPanel implements MouseListener {
         // Ends of the middle box (small boxes spinning fast)
         float offset = 0.3f; // match middleBox width
 
-
-
+        // Create LOD versions of the fan blades
+        // Load the models separately for left and right (to avoid sharing nodes)
         ObjectFile f = new ObjectFile(ObjectFile.RESIZE, (float) (60 * Math.PI / 180.0));
         Scene s1 = null;
         Scene s2 = null;
@@ -395,46 +471,77 @@ public class BasicScene extends JPanel implements MouseListener {
         if (s1 == null || s2 == null) {
             System.exit(1); //this won't happen dw
         }
-        BranchGroup b1 = s1.getSceneGroup();
-        BranchGroup b2 = s2.getSceneGroup();
-
+        
+        // LEFT FAN BLADE
+        // Create high detail version for left fan
         TransformGroup tg1 = new TransformGroup();
-        tg1.addChild(b1);
+        tg1.addChild(s1.getSceneGroup());
         Transform3D transform1 = new Transform3D();
         transform1.rotY(Math.PI/2);
         transform1.setScale(.1);
         tg1.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
         tg1.setTransform(transform1);
-
+        
+        // Create a low detail version (small box) for the left fan blade
+        TransformGroup lowDetailLeftTG = new TransformGroup();
+        Appearance fanAppearance = new Appearance();
+        Material fanMaterial = new Material(
+                new Color3f(0.8f, 0.8f, 0.8f),   // Ambient
+                new Color3f(0.1f, 0.1f, 0.1f),   // Emissive
+                new Color3f(0.8f, 0.8f, 0.8f),   // Diffuse
+                new Color3f(1.0f, 1.0f, 1.0f),   // Specular
+                64.0f                            // Shininess
+        );
+        fanAppearance.setMaterial(fanMaterial);
+        Box lowDetailFan = new Box(0.01f, 0.01f, 0.01f, Box.GENERATE_NORMALS, fanAppearance);
+        lowDetailLeftTG.addChild(lowDetailFan);
+        
+        // Create empty medium detail node - we'll just use two levels
+        TransformGroup emptyLeftTG = new TransformGroup();
+        Box emptyBox = new Box(0.001f, 0.001f, 0.001f, Box.GENERATE_NORMALS, fanAppearance);
+        emptyLeftTG.addChild(emptyBox);
+        
+        // Create LOD for left fan blade
+        double[] fanDistances = {2.3, 2.4, 100.0}; // Almost immediate transition
+        BranchGroup leftFanLODBG = LODHelper.createLOD(tg1, emptyLeftTG, lowDetailLeftTG, fanDistances);
+        
+        // RIGHT FAN BLADE
+        // Create high detail version for right fan (using separate model instance)
         TransformGroup tg2 = new TransformGroup();
-        tg2.addChild(b2);
+        tg2.addChild(s2.getSceneGroup());
         Transform3D transform2 = new Transform3D();
         transform2.rotY(Math.PI/2);
         transform2.setScale(.1);
         tg2.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
         tg2.setTransform(transform2);
+        
+        // Create a low detail version for the right fan blade
+        TransformGroup lowDetailRightTG = new TransformGroup();
+        Box lowDetailFanRight = new Box(0.01f, 0.01f, 0.01f, Box.GENERATE_NORMALS, fanAppearance);
+        lowDetailRightTG.addChild(lowDetailFanRight);
+        
+        // Create empty medium detail node - we'll just use two levels
+        TransformGroup emptyRightTG = new TransformGroup();
+        Box emptyRightBox = new Box(0.001f, 0.001f, 0.001f, Box.GENERATE_NORMALS, fanAppearance);
+        emptyRightTG.addChild(emptyRightBox);
+        
+        // Create LOD for right fan blade (using same distances)
+        BranchGroup rightFanLODBG = LODHelper.createLOD(tg2, emptyRightTG, lowDetailRightTG, fanDistances);
 
-
-//        Box endBoxLeft = new Box(0.005f, 0.01f, 0.05f, null);
+        // Add fan blades to the spinning transforms
         TransformGroup spinLeft = createSpinner(200, 'z'); // faster spin
-
         Transform3D leftTrans = new Transform3D();
         leftTrans.setTranslation(new Vector3f(-offset, 0f, 0f));
         TransformGroup leftTG = new TransformGroup(leftTrans);
-        leftTG.addChild(tg1);
+        leftTG.addChild(leftFanLODBG);
         spinLeft.addChild(leftTG);
         midBoxTG.addChild(spinLeft); // attach to midBoxTG so it spins with it
 
-
-
-
-//        Box endBoxRight = new Box(0.01f, 0.01f, 0.05f, null);
         TransformGroup spinRight = createSpinner(200, 'z');
-
         Transform3D rightTrans = new Transform3D();
         rightTrans.setTranslation(new Vector3f(offset, 0f, 0f));
         TransformGroup rightTG = new TransformGroup(rightTrans);
-        rightTG.addChild(tg2);
+        rightTG.addChild(rightFanLODBG);
         spinRight.addChild(rightTG);
         midBoxTG.addChild(spinRight);
 
@@ -442,8 +549,35 @@ public class BasicScene extends JPanel implements MouseListener {
         rootBG.setCapability(BranchGroup.ALLOW_CHILDREN_EXTEND);
         rootBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
 
+        // When creating the fan components, add user data to identify them:
+        
+        leftFanLODBG.setUserData("fan-left");
+        rightFanLODBG.setUserData("fan-right");
+
         sceneBG.compile();
         return sceneBG;
+    }
+
+    private Point2f getUnfilledPosn() {
+        Random rand = new Random();
+        float x;
+        float z;
+        while (true) {
+            int randX = rand.nextInt(18) + 1;
+            int randY = rand.nextInt(18) + 1;
+            //empty posn not filled by the spinny thingamajig
+            if ((walls[randX][randY] == 0) && !(9 <= randX && randX < 12 && 9 <= randY && randY < 12)) {
+                x = -1 + randX * 0.103f;
+                z = -1 + randY * 0.103f;
+                break;
+            }
+        }
+        return new Point2f(x, z);
+
+    }
+
+    public static void setGameEnded(boolean ended) {
+        gameEnded = ended;
     }
 
     private TransformGroup createSpinner(long durationMillis, char axis) {
@@ -470,15 +604,26 @@ public class BasicScene extends JPanel implements MouseListener {
 
     private TransformGroup addWall(BranchGroup sceneBG, double x, double y, double z,
                                    double width, double height, double depth,
-                                   Appearance appearance, int i, int j) {
-        Transform3D transform = new Transform3D();
-        transform.setTranslation(new Vector3d(x, y, z));
-        TransformGroup tg = new TransformGroup(transform);
-        TransformGroup container = new TransformGroup();
-        container.addChild(tg);
-        Box wall = new Box((float) width, (float) height, (float) depth,
-                Box.GENERATE_NORMALS | Box.GENERATE_TEXTURE_COORDS, appearance);
-        tg.addChild(wall);
+                                   Appearance appearance, int i, int j, boolean render) {
+        if (render) {
+            Transform3D transform = new Transform3D();
+            transform.setTranslation(new Vector3d(x, y, z));
+            TransformGroup tg = new TransformGroup(transform);
+            TransformGroup container = new TransformGroup();
+            container.addChild(tg);
+            Box wall = new Box((float) width, (float) height, (float) depth,
+                    Box.GENERATE_NORMALS | Box.GENERATE_TEXTURE_COORDS, appearance);
+            tg.addChild(wall);
+            double left = x - width;
+            double top = z + depth;
+            double rectWidth = 2 * width;
+            double rectHeight = 2 * depth;
+            double bottom = top - rectHeight;
+            Rectangle2D.Double wallRect = new Rectangle2D.Double(left, bottom, rectWidth, rectHeight);
+            wallBounds.put(wallRect, new Point(i, j));
+            return container;
+        }
+
         double left = x - width;
         double top = z + depth;
         double rectWidth = 2 * width;
@@ -486,8 +631,10 @@ public class BasicScene extends JPanel implements MouseListener {
         double bottom = top - rectHeight;
         Rectangle2D.Double wallRect = new Rectangle2D.Double(left, bottom, rectWidth, rectHeight);
         wallBounds.put(wallRect, new Point(i, j));
-        return container;
+        return null;
     }
+
+
 
     private void createSpotlight(BranchGroup sceneBG) {
         spotlightTG = new TransformGroup();
@@ -521,10 +668,25 @@ public class BasicScene extends JPanel implements MouseListener {
             @Override
             public void keyPressed(KeyEvent e) {
                 switch (e.getKeyChar()) {
-                    case 'w': upPressed = true; break;
-                    case 's': downPressed = true; break;
-                    case 'a': leftPressed = true; break;
-                    case 'd': rightPressed = true; break;
+                    case 'w':
+                        upPressed = true;
+                        break;
+                    case 's':
+                        downPressed = true;
+                        break;
+                    case 'a':
+                        leftPressed = true;
+                        break;
+                    case 'd':
+                        rightPressed = true;
+                        break;
+                    case 'e':
+                        // Only allow the blue player (playerId == 2) to activate the treasure.
+                        if (playerId == 2) {
+                            out.println("TREASURE_ACTIVATE");
+                            System.out.println("TREASURE_ACTIVATE sent by blue player.");
+                        }
+                        break;
                     default:
                         break;
                 }
@@ -532,19 +694,35 @@ public class BasicScene extends JPanel implements MouseListener {
             @Override
             public void keyReleased(KeyEvent e) {
                 switch (e.getKeyChar()) {
-                    case 'w': upPressed = false; break;
-                    case 's': downPressed = false; break;
-                    case 'a': leftPressed = false; break;
-                    case 'd': rightPressed = false; break;
+                    case 'w':
+                        upPressed = false;
+                        break;
+                    case 's':
+                        downPressed = false;
+                        break;
+                    case 'a':
+                        leftPressed = false;
+                        break;
+                    case 'd':
+                        rightPressed = false;
+                        break;
                     default:
                         break;
                 }
             }
         });
 
+
         canvas.setFocusable(true);
         canvas.requestFocusInWindow();
 
+
+        blueGhostCycle = new AppearanceCycleBehavior(blueGhost.getTransformGroup(), blueGhost, out);
+        blueGhostCycle.setSchedulingBounds(new BoundingSphere(new Point3d(0,0,0), 100.0));
+        BranchGroup behaviorBG = new BranchGroup();
+        behaviorBG.setCapability(BranchGroup.ALLOW_CHILDREN_WRITE);
+        behaviorBG.addChild(blueGhostCycle);
+        sceneBG.addChild(behaviorBG);
         Timer movementTimer = new Timer(16, new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -559,11 +737,22 @@ public class BasicScene extends JPanel implements MouseListener {
         universe.addBranchGraph(sceneBG);
         setLayout(new BorderLayout());
         add("Center", canvas);
+
+//        // In setupUniverse method:
+//        javax.swing.Timer endTimer = new javax.swing.Timer(2000, new ActionListener() {
+//            @Override
+//            public void actionPerformed(ActionEvent e) {
+//                GameEndAnimation gameEnd = new GameEndAnimation(universe, rootBG);
+//                gameEnd.triggerGameEnd("Blue");
+//            }
+//        });
+//        endTimer.setRepeats(false); // Ensure the timer only fires once
+//        endTimer.start();
     }
 
     private void updateMovement() {
         double dx = 0, dz = 0;
-        double oldX, oldZ, newX, newZ;
+        double oldX, oldZ, newX = 0, newZ = 0;
         if (playerId == 1) {
             oldX = redBoxPos.x;
             oldZ = redBoxPos.z;
@@ -571,60 +760,71 @@ public class BasicScene extends JPanel implements MouseListener {
             oldX = blueBoxPos.x;
             oldZ = blueBoxPos.z;
         }
-        newX = oldX;
-        newZ = oldZ;
 
         int direction = -1;
-        boolean movementPressed = false;
+        // Get the movement step from the corresponding ghost.
+        double step = (playerId == 1) ? redGhost.step : blueGhost.step;
+        boolean moved = false;
 
-        // Determine movement based on key presses
-        if (upPressed) {
-            dz -= STEP;
-            direction = GhostModel.DIRECTION_UP;
-            movementPressed = true;
-        }
-        if (downPressed) {
-            dz += STEP;
-            direction = GhostModel.DIRECTION_DOWN;
-            movementPressed = true;
-        }
-        if (leftPressed) {
-            dx -= STEP;
-            direction = GhostModel.DIRECTION_LEFT;
-            movementPressed = true;
-        }
-        if (rightPressed) {
-            dx += STEP;
-            direction = GhostModel.DIRECTION_RIGHT;
-            movementPressed = true;
-        }
+        // Try various combinations: first change both axes, then only one axis.
+        boolean[][] combos = { {true, true}, {true, false}, {false, true}, {false, false} };
+        for (boolean[] combo : combos) {
+            boolean changeX = combo[0], changeZ = combo[1];
+            dx = 0;
+            dz = 0;
+            newX = oldX;
+            newZ = oldZ;
+            direction = -1;
+            // Apply key inputs conditionally.
+            if (upPressed && changeZ) {
+                dz -= step;
+                direction = GhostModel.DIRECTION_UP;
+            }
+            if (downPressed && changeZ) {
+                dz += step;
+                direction = GhostModel.DIRECTION_DOWN;
+            }
+            if (leftPressed && changeX) {
+                dx -= step;
+                direction = GhostModel.DIRECTION_LEFT;
+            }
+            if (rightPressed && changeX) {
+                dx += step;
+                direction = GhostModel.DIRECTION_RIGHT;
+            }
 
-        if (!movementPressed) {
-            return;
-        }
+            // Normalize diagonal movement.
+            if (dx != 0 || dz != 0) {
+                double length = Math.sqrt(dx * dx + dz * dz);
+                dx = dx / length * step;
+                dz = dz / length * step;
+                if (dx != 0 && dz != 0) {
+                    if (dx < 0 && dz > 0) {
+                        direction = GhostModel.DIRECTION_DOWNLEFT;
+                    } else if (dx < 0 && dz < 0) {
+                        direction = GhostModel.DIRECTION_UPLEFT;
+                    } else if (dx > 0 && dz > 0) {
+                        direction = GhostModel.DIRECTION_DOWNRIGHT;
+                    } else {
+                        direction = GhostModel.DIRECTION_UPRIGHT;
+                    }
+                }
+            } else {
+                // No movement if no key pressed.
+                return;
+            }
 
-        // Normalize diagonal movement
-        if (dx != 0 || dz != 0) {
-            double length = Math.sqrt(dx * dx + dz * dz);
-            dx = dx / length * STEP;
-            dz = dz / length * STEP;
-            // Adjust direction for diagonals
-            if (dx < 0 && dz > 0) {
-                direction = GhostModel.DIRECTION_DOWNLEFT;
-            } else if (dx < 0 && dz < 0) {
-                direction = GhostModel.DIRECTION_UPLEFT;
-            } else if (dx > 0 && dz > 0) {
-                direction = GhostModel.DIRECTION_DOWNRIGHT;
-            } else if (dx > 0 && dz < 0) {
-                direction = GhostModel.DIRECTION_UPRIGHT;
+            newX += dx;
+            newZ += dz;
+            // If the new position doesn't collide with a wall, accept this move.
+            if (!collidesWithWall(newX, newZ)) {
+                moved = true;
+                break;
             }
         }
 
-        newX += dx;
-        newZ += dz;
-
-        // Check for wall collisions
-        if (collidesWithWall(newX, newZ)) {
+        if (!moved) {
+            // If no valid movement, play collision sound and exit.
             if (System.currentTimeMillis() - lastCollisionTime > COLLISION_COOLDOWN) {
                 playWallCollisionSound();
                 lastCollisionTime = System.currentTimeMillis();
@@ -632,28 +832,21 @@ public class BasicScene extends JPanel implements MouseListener {
             return;
         }
 
-        // Check for NPC collisions from any angle
-        boolean npcCollision = false;
+        // Check for collisions with NPCs.
         for (NPC npc : npcs) {
             Vector3d npcPos = npc.getPosition();
             if (CollisionDetector.isColliding(
                     newX, newZ, GhostModel.getCharacterHalf(),
-                    npcPos.x, npcPos.z, NPC.getCharacterHalf()
-            )) {
-                npcCollision = true;
-                break; // Exit early if any collision found
+                    npcPos.x, npcPos.z, NPC.getCharacterHalf())) {
+                if (System.currentTimeMillis() - lastCollisionTime > COLLISION_COOLDOWN) {
+                    playWallCollisionSound();
+                    lastCollisionTime = System.currentTimeMillis();
+                }
+                return;
             }
         }
 
-        // Block movement if colliding with any NPC
-        if (npcCollision) {
-            if (System.currentTimeMillis() - lastCollisionTime > COLLISION_COOLDOWN) {
-                playWallCollisionSound();
-                lastCollisionTime = System.currentTimeMillis();
-            }
-            return;
-        }
-
+        // Check for collisions with the other player.
         Vector3d otherPlayerPos = (playerId == 1) ? blueBoxPos : redBoxPos;
         if (CollisionDetector.isColliding(
                 newX, newZ, GhostModel.getCharacterHalf(),
@@ -665,7 +858,7 @@ public class BasicScene extends JPanel implements MouseListener {
             return;
         }
 
-        // Update position if no collisions
+        // Update position if no collisions occurred.
         if (playerId == 1) {
             redBoxPos.x = newX;
             redBoxPos.z = newZ;
@@ -690,7 +883,10 @@ public class BasicScene extends JPanel implements MouseListener {
         }
     }
 
+
     private void updateCamera() {
+        if(gameEnded) return;
+
         Vector3d localPos = (playerId == 1) ? redBoxPos : blueBoxPos;
         Point3d eye = new Point3d(localPos.x, localPos.y + 0.6, localPos.z + 0.5);
         Point3d center = new Point3d(localPos.x, localPos.y, localPos.z);
@@ -699,6 +895,9 @@ public class BasicScene extends JPanel implements MouseListener {
         viewTransform.lookAt(eye, center, up);
         viewTransform.invert();
         universe.getViewingPlatform().getViewPlatformTransform().setTransform(viewTransform);
+        
+        // Update fan blade LOD positions
+        updateFanLODPositions();
     }
 
     private void updateSpotlight() {
@@ -707,6 +906,62 @@ public class BasicScene extends JPanel implements MouseListener {
         Vector3d spotlightPos = new Vector3d(localPos.x, 0.8, localPos.z);
         spotlightTransform.setTranslation(spotlightPos);
         spotlightTG.setTransform(spotlightTransform);
+    }
+
+    /**
+     * Updates the LOD positions for fan blades based on player position
+     */
+    private void updateFanLODPositions() {
+        // Get the player position based on playerId
+        Vector3d playerPos = (playerId == 1) ? redBoxPos : blueBoxPos;
+        
+        // Calculate the position of the fan (at center with cylinder)
+        Vector3d fanPosition = new Vector3d(0.03, 0.1, 0.03);
+        
+        // Find only fan-related DistanceLOD behaviors and update them
+        // We need to be more specific about which LODs we're updating
+        if (rootBG != null) {
+            // Look for fan LOD behaviors specifically
+            // These will be in the midBoxTG hierarchy
+            for (int i = 0; i < rootBG.numChildren(); i++) {
+                Node child = rootBG.getChild(i);
+                if (child instanceof TransformGroup) {
+                    TransformGroup tg = (TransformGroup)child;
+                    // Only look for fan LODs - you might need to add 
+                    // some kind of identifier to find these specifically
+                    if (isFanComponent(tg)) {
+                        updateFanLODInGroup(tg, playerPos);
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * Checks if a node is part of the fan structure
+     */
+    private boolean isFanComponent(Node node) {
+        // This is a simplification - you'll need to adapt this
+        // to identify your fan components specifically
+        // One approach is to check if the node contains a specific UserData
+        return node.getUserData() != null && 
+               node.getUserData().toString().contains("fan");
+    }
+    
+    /**
+     * Updates LOD positions specifically for fan components
+     */
+    private void updateFanLODInGroup(Node node, Vector3d viewerPosition) {
+        if (node instanceof DistanceLOD) {
+            // Update the LOD's position
+            LODHelper.updateLODPosition((DistanceLOD) node, viewerPosition);
+        } else if (node instanceof Group) {
+            Group group = (Group) node;
+            // Search all children
+            for (int i = 0; i < group.numChildren(); i++) {
+                updateFanLODInGroup(group.getChild(i), viewerPosition);
+            }
+        }
     }
 
     private boolean collidesWithWall(double x, double z) {
@@ -845,7 +1100,14 @@ public class BasicScene extends JPanel implements MouseListener {
     public void mousePressed(MouseEvent e){}
     public void mouseReleased(MouseEvent e) {}
     public void mouseEntered(MouseEvent e) {}
+
+    //either:
+    //RED clicks on player
+    //or
+    //BLUE clicks on NPC
+    @Override
     public void mouseClicked(MouseEvent e) {
+        // Compute the pick ray from the click coordinates.
         Point3d pixelPos = new Point3d();
         Point3d eyePos = new Point3d();
         canvas.getPixelLocationInImagePlate(e.getX(), e.getY(), pixelPos);
@@ -860,18 +1122,35 @@ public class BasicScene extends JPanel implements MouseListener {
         rayDirection.sub(pixelPos, eyePos);
         rayDirection.normalize();
 
-        pickTool.setShapeRay(eyePos, rayDirection);
-//        System.out.println(pickTool.pickClosest());
-        if (pickTool.pickClosest() != null) {
-            double dist = Math.pow((Math.pow(redBoxPos.x - blueBoxPos.x, 2) + Math.pow(redBoxPos.z - blueBoxPos.z, 2)), .5);
-            if (dist < .5f && playerId == 1) {
-                blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
-                blueGhost.updatePositionAndRotation(blueBoxPos.x, blueBoxPos.z, GhostModel.DIRECTION_DOWN);
+        // Check for a collision using the red pick tool.
+        redPickTool.setShapeRay(eyePos, rayDirection);
+        if (redPickTool.pickClosest() != null) {
+            // Calculate distance between red and blue ghosts.
+            double dist = Math.sqrt(Math.pow(redBoxPos.x - blueBoxPos.x, 2) + Math.pow(redBoxPos.z - blueBoxPos.z, 2));
+            System.out.println("Red pick detected. Distance: " + dist);
+            System.out.printf("%f\n %f %f\n%f %f\n", dist, blueBoxPos.x, blueBoxPos.z, redBoxPos.x, redBoxPos.z);
+            // If within a threshold and this is player 1, update blue ghost's position.
+            if (dist < 0.5f && playerId == 1) {
+                System.out.println("Red player's action: updating blue ghost position.");
+                Point2f p = getUnfilledPosn();
+                blueBoxPos.x = p.getX();
+                blueBoxPos.z = p.getY();
+                // Broadcast new blue ghost position to all clients.
+                out.println("2 " + p.getX() + " " + 0.1 + " " + p.getY() + " " + GhostModel.DIRECTION_DOWN);
+                blueGhost.updatePositionAndRotation(p.getX(), p.getY(), GhostModel.DIRECTION_DOWN);
             }
+        }
+
+        // Check for a collision using the blue pick tool.
+        bluePickTool.setShapeRay(eyePos, rayDirection);
+        if (bluePickTool.pickClosest() != null && playerId == 2) {
+            // Instead of directly changing the appearance, we call triggerChange() so the event is sent to the server.
+            blueGhostCycle.triggerChange();
         }
 
         return;
     }
+
 
 
     private BranchGroup createTreasure(double x, double y, double z) {

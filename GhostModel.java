@@ -32,7 +32,9 @@ public class GhostModel {
     private Vector3d position;
     private Color3f modelColor;
     private boolean isRedPlayer;
+    public boolean isTransformed = false;
     private int currentDirection = DIRECTION_DOWN; // Default facing down (S key)
+    public double step = .01;
 
     /**
      * Creates a new ghost model.
@@ -46,7 +48,7 @@ public class GhostModel {
 
         // Set color based on player
         this.modelColor = isRedPlayer ?
-                new Color3f(1.0f, 0.2f, 0.2f) :  // Red for player 1
+                new Color3f(1.0f, 0.2f, 0.2f) :  // Red for player 1//if it's green
                 new Color3f(0.2f, 0.2f, 1.0f);   // Blue for player 2
 
         // Create the transform group for position
@@ -158,6 +160,7 @@ public class GhostModel {
     private void applyAppearanceToModel(Node node, Appearance appearance) {
         if (node instanceof Shape3D) {
             Shape3D shape = (Shape3D) node;
+            shape.setCapability(Shape3D.ALLOW_APPEARANCE_WRITE);
             shape.setAppearance(appearance);
         } else if (node instanceof Group) {
             Group group = (Group) node;
