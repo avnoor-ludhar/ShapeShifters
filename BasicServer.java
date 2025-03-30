@@ -159,10 +159,14 @@ public class BasicServer {
         for (int i = 0; i < npcs.size(); i++) {
             NPC npc = npcs.get(i);
             Vector3d pos = npc.getPosition();
+            Vector3d dir = npc.getDirection();
+            
             npcState.append(" ").append(i)
                     .append(" ").append(pos.x)
                     .append(" ").append(0.1)
-                    .append(" ").append(pos.z);
+                    .append(" ").append(pos.z)
+                    .append(" ").append(dir.x)
+                    .append(" ").append(dir.z);
         }
         for (ClientHandler client : clients) {
             client.sendMessage(npcState.toString());
