@@ -703,13 +703,6 @@ public class BasicScene extends JPanel implements MouseListener {
                     case 'd':
                         rightPressed = true;
                         break;
-                    case 'e':
-                        // Only allow the blue player (playerId == 2) to activate the treasure.
-                        if (playerId == 2) {
-                            out.println("TREASURE_ACTIVATE");
-                            System.out.println("TREASURE_ACTIVATE sent by blue player.");
-                        }
-                        break;
                     default:
                         break;
                 }
@@ -760,8 +753,6 @@ public class BasicScene extends JPanel implements MouseListener {
         universe.addBranchGraph(sceneBG);
         setLayout(new BorderLayout());
         add("Center", canvas);
-
-
     }
 
 

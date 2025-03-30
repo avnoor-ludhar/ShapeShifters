@@ -96,6 +96,8 @@ public class TreasureKeyBehavior extends Behavior {
             if (diff.length() < TREASURE_INTERACT_DISTANCE && !BasicScene.getGameEnded()) {
                 startMorphAnimation();
                 treasureIsCoin = false;
+                out.println("TREASURE_ACTIVATE");
+                System.out.println("TREASURE_ACTIVATE sent by blue player.");
                 // Send game end message for treasure win.
                 out.println("GAME_END Blue");
             }
