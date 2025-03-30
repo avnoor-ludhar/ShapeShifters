@@ -219,11 +219,11 @@ public class GameMenu extends JFrame {
     // Immediately loads the game logo image from the specified file path.
     private void loadGameLogo() {
         try {
-            String imagePath = "src/ShapeShifters/Textures/MenuTexture.png";
+            String imagePath = "src/ShapeShifters/Textures/LogoGenerated.png";
             ImageIcon imageIcon = new ImageIcon(imagePath);
             if (imageIcon.getIconWidth() > 0) {
                 Image img = imageIcon.getImage();
-                Image resizedImg = img.getScaledInstance(300, 200, Image.SCALE_SMOOTH);
+                Image resizedImg = img.getScaledInstance(300, 300, Image.SCALE_SMOOTH);
                 imageIcon = new ImageIcon(resizedImg);
                 imageLabel.setIcon(imageIcon);
                 imageLabel.setText("");
