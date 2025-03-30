@@ -34,7 +34,7 @@ public class BasicScene extends JPanel implements MouseListener {
     private Canvas3D canvas;
     private PickTool pickTool;
     // Player positions (x, y, z) – y remains constant at 0.1.
-    private Vector3d redBoxPos = new Vector3d(0.0, 0.1, 0.0);
+    private Vector3d redBoxPos = new Vector3d(0.3, 0.1, 0.0);
     private Vector3d blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
     private final double STEP = 0.010;
 
@@ -647,6 +647,17 @@ public class BasicScene extends JPanel implements MouseListener {
 
         // Block movement if colliding with any NPC
         if (npcCollision) {
+            if (System.currentTimeMillis() - lastCollisionTime > COLLISION_COOLDOWN) {
+                playWallCollisionSound();
+                lastCollisionTime = System.currentTimeMillis();
+            }
+            return;
+        }
+
+        Vector3d otherPlayerPos = (playerId == 1) ? blueBoxPos : redBoxPos;
+        if (CollisionDetector.isColliding(
+                newX, newZ, GhostModel.getCharacterHalf(),
+                otherPlayerPos.x, otherPlayerPos.z, GhostModel.getCharacterHalf())) {
             if (System.currentTimeMillis() - lastCollisionTime > COLLISION_COOLDOWN) {
                 playWallCollisionSound();
                 lastCollisionTime = System.currentTimeMillis();
