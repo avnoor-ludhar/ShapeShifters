@@ -146,29 +146,38 @@ public class BasicServer {
                         if (CollisionDetector.isColliding(npcPos.x, npcPos.z, npcHalf,
                                 playerPos.x, playerPos.z, playerHalf)) {
 
-                            // Calculate collision normal (NPC to player direction)
+                            // Calculate push back direction (from NPC to player)
                             Vector3d collisionNormal = new Vector3d(
-                                    playerPos.x - npcPos.x,
+                                    npcPos.x - playerPos.x,
                                     0,
-                                    playerPos.z - npcPos.z
+                                    npcPos.z - playerPos.z
                             );
                             collisionNormal.normalize();
 
-                            // Reflect NPC's direction using the collision normal
-                            Vector3d newDirection = new Vector3d(npc.getDirection());
-                            double dot = newDirection.dot(collisionNormal);
-                            newDirection.x -= 2 * dot * collisionNormal.x;
-                            newDirection.z -= 2 * dot * collisionNormal.z;
+                            // Set a stronger bounce factor
+                            double bounceFactor = 1.5; // Adjust this value as needed
+
+                            // Calculate new position that pushes the NPC away
+                            Vector3d newNPCPos = new Vector3d(
+                                    npcPos.x + collisionNormal.x * npc.getStep() * bounceFactor,
+                                    0.1,
+                                    npcPos.z + collisionNormal.z * npc.getStep() * bounceFactor
+                            );
+
+                            // Reverse and slightly randomize direction
+                            Vector3d newDirection = new Vector3d(
+                                    -npc.getDirection().x + (Math.random() * 0.2 - 0.1),
+                                    0,
+                                    -npc.getDirection().z + (Math.random() * 0.2 - 0.1)
+                            );
                             newDirection.normalize();
 
-                            // Update NPC direction and position
                             npc.setDirection(newDirection);
-                            Vector3d newNPCPos = new Vector3d(
-                                    npcPos.x - collisionNormal.x * npc.getStep(),
-                                    0.1,
-                                    npcPos.z - collisionNormal.z * npc.getStep()
-                            );
                             npc.setPosition(newNPCPos);
+
+                            // Debug logging (optional)
+                            System.out.println("NPC collided with player " + entry.getKey() +
+                                    " - New NPC pos: " + newNPCPos + " New direction: " + newDirection);
                         }
                     }
                 }
@@ -311,7 +320,7 @@ public class BasicServer {
                         broadcast("TREASURE_MORPH", this);
                         continue;
                     }
-                    // Handle ghost morph commands (e.g., "GREEN" or "BLUE") and any other commands.
+                    // Handle ghost morph commands
                     if (line.startsWith("GREEN") || line.startsWith("BLUE")) {
                         broadcast(line, this);
                         continue;
@@ -320,6 +329,14 @@ public class BasicServer {
                     String[] tokens = line.split(" ");
                     if (tokens.length < 4)
                         continue;
+
+                    // Update player position in the map
+                    int id = Integer.parseInt(tokens[0]);
+                    double x = Double.parseDouble(tokens[1]);
+                    double y = Double.parseDouble(tokens[2]);
+                    double z = Double.parseDouble(tokens[3]);
+                    playerPositions.put(id, new Vector3d(x, y, z));
+
                     broadcast(line, this);
                 }
             } catch (IOException e) {
