@@ -1,27 +1,31 @@
 package ShapeShifters;
 
-import java.awt.Point;
 import java.util.ArrayList;
 import java.util.Random;
 
+// Handles maze creation and customization
 public class MazeManager {
     private final int mazeHeight;
     private final int mazeWidth;
     private ArrayList<ArrayList<Integer>> maze;
-    private int[][] movingWalls; // Four moving wall positions
+    private int[][] movingWalls;
 
+    // Initializes the maze
+    // Modifies the maze
+    // Sets moving walls within the maze
     public MazeManager(int height, int width) {
-        // Use the same dimensions as before.
+        // Use the same dimensions as before
         this.mazeHeight = height;
         this.mazeWidth = width;
-        // Get the maze grid from GenerateMaze.
+        // Get the maze grid from GenerateMaze
         maze = GenerateMaze.getMaze(height, width);
-        // Now, modify the maze just like in your original code:
         clearCenter();
         removeRandomWalls();
         designateMovingWalls();
     }
 
+    // Clears a 3x3 region in the center of the maze
+        // So the fan in the middle has a guaranteed open space at all times
     private void clearCenter() {
         // Clear a central area of the maze (positions 9 to 11)
         for (int i = 9; i < 12; i++) {
@@ -31,6 +35,8 @@ public class MazeManager {
         }
     }
 
+    // Randomly removes walls in the maze
+    // Adds unpredictability to the generated maze
     private void removeRandomWalls() {
         // Remove walls randomly (20% chance)
         for (int i = 1; i < mazeHeight - 1; i++) {
@@ -42,6 +48,7 @@ public class MazeManager {
         }
     }
 
+    // Randomly selects 4 wall positions which can later be animated or modified during gameplay
     private void designateMovingWalls() {
         movingWalls = new int[4][2];
         Random rand = new Random();
@@ -57,6 +64,7 @@ public class MazeManager {
         }
     }
 
+    // Helper method to avoid selecting duplicate wall positions
     private boolean alreadyChosen(int i, int j, int count) {
         for (int n = 0; n < count; n++) {
             if (movingWalls[n][0] == i && movingWalls[n][1] == j) {
@@ -66,10 +74,12 @@ public class MazeManager {
         return false;
     }
 
+    // Returns the generated and modified maze grid
     public ArrayList<ArrayList<Integer>> getMaze() {
         return maze;
     }
 
+    // Returns the list of moving wall coordinates
     public int[][] getMovingWalls() {
         return movingWalls;
     }
