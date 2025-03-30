@@ -14,8 +14,6 @@ public class GameEndAnimation {
     }
 
     public void triggerGameEnd(String winningTeam) {
-        BasicScene.setGameEnded(true);
-
         // Camera setup (unchanged)
         Transform3D viewTransform = new Transform3D();
         Point3d eye = new Point3d(0.0, 4.0, 0.0);

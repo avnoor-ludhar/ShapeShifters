@@ -210,6 +210,14 @@ public class BasicScene extends JPanel implements MouseListener {
             String line;
             try {
                 while ((line = in.readLine()) != null) {
+                    if (line.startsWith("GAME_END")) {
+                        // Extract optional winner information.
+                        String[] tokens = line.split(" ");
+                        String winner = (tokens.length > 1) ? tokens[1] : "unknown";
+                        triggerGameEnd(winner);
+                        continue;
+                    }
+
                     if (line != null && line.startsWith("GREEN")) {
 //                        System.out.println("HELLO WROLD");
                         updateAppearance(blueGhost.getTransformGroup(), blueGhostCycle.newAppearance);
@@ -425,7 +433,7 @@ public class BasicScene extends JPanel implements MouseListener {
             sceneBG.addChild(treasureBranchGroup);
 
             // Create and add treasure behavior
-            treasureKeyBehavior = new TreasureKeyBehavior(treasureBranchGroup, treasureGroup, redBoxPos, blueBoxPos, playerId, sceneBG);
+            treasureKeyBehavior = new TreasureKeyBehavior(treasureBranchGroup, treasureGroup, redBoxPos, blueBoxPos, playerId, sceneBG, out);
             treasureKeyBehavior.setSchedulingBounds(new BoundingSphere(new Point3d(0,0,0), 100.0));
             sceneBG.addChild(treasureKeyBehavior);
         }
@@ -563,6 +571,25 @@ public class BasicScene extends JPanel implements MouseListener {
         sceneBG.compile();
         return sceneBG;
     }
+    public static boolean getGameEnded(){
+        return gameEnded;
+    }
+
+    private void triggerGameEnd(String winner) {
+        gameEnded = true;
+        // Pause the game for 2 seconds before showing the end animation.
+        new Thread(() -> {
+            try {
+                Thread.sleep(3000); // 3 second delay
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            GameEndAnimation gameEnd = new GameEndAnimation(universe, rootBG);
+            gameEnd.triggerGameEnd(winner);
+            System.out.println("Game Over! Winner: " + winner);
+        }).start();
+    }
+
 
     private Point2f getUnfilledPosn() {
         Random rand = new Random();
@@ -582,9 +609,7 @@ public class BasicScene extends JPanel implements MouseListener {
 
     }
 
-    public static void setGameEnded(boolean ended) {
-        gameEnded = ended;
-    }
+
 
     private TransformGroup createSpinner(long durationMillis, char axis) {
         TransformGroup spinner = new TransformGroup();
@@ -1136,7 +1161,7 @@ public class BasicScene extends JPanel implements MouseListener {
             System.out.println("Red pick detected. Distance: " + dist);
             System.out.printf("%f\n %f %f\n%f %f\n", dist, blueBoxPos.x, blueBoxPos.z, redBoxPos.x, redBoxPos.z);
             // If within a threshold and this is player 1, update blue ghost's position.
-            if (dist < 0.5f && playerId == 1) {
+            if (dist < 0.5f && playerId == 1 && !gameEnded) {
                 System.out.println("Red player's action: updating blue ghost position.");
                 Point2f p = getUnfilledPosn();
                 blueBoxPos.x = p.getX();
@@ -1144,6 +1169,7 @@ public class BasicScene extends JPanel implements MouseListener {
                 // Broadcast new blue ghost position to all clients.
                 out.println("2 " + p.getX() + " " + 0.1 + " " + p.getY() + " " + GhostModel.DIRECTION_DOWN);
                 blueGhost.updatePositionAndRotation(p.getX(), p.getY(), GhostModel.DIRECTION_DOWN);
+                out.println("GAME_END Red");
             }
         }
 
