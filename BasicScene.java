@@ -230,17 +230,23 @@ public class BasicScene extends JPanel implements MouseListener {
                     // Handle NPC update messages.
                     if (line.startsWith("NPC_UPDATE")) {
                         String[] tokens = line.split(" ");
-                        for (int i = 1; i < tokens.length; i += 4) {
+                        for (int i = 1; i < tokens.length; i += 6) { // Now 6 values per NPC instead of 4
                             int npcId = Integer.parseInt(tokens[i]);
                             double x = Double.parseDouble(tokens[i + 1]);
                             double y = Double.parseDouble(tokens[i + 2]);
                             double z = Double.parseDouble(tokens[i + 3]);
+                            double dirX = Double.parseDouble(tokens[i + 4]); // Direction X
+                            double dirZ = Double.parseDouble(tokens[i + 5]); // Direction Z
+                            
                             NPC npc = npcs.get(npcId);
                             Vector3d newPos = new Vector3d(x, y, z);
                             npc.setPosition(newPos);
                             Transform3D transform = new Transform3D();
                             transform.setTranslation(newPos);
                             npc.getTransformGroup().setTransform(transform);
+                            
+                            // Update direction and rotation
+                            npc.updateDirection(new Vector3d(dirX, 0, dirZ));
                         }
                         continue;
                     }

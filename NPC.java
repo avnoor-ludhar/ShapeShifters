@@ -32,6 +32,14 @@ public class NPC {
     public NPC(Vector3d pos, Vector3d dir, double step, Appearance unusedAppearance) {
         this.position = new Vector3d(pos);
         this.direction = new Vector3d(dir);
+        
+        // Normalize the direction if it's diagonal
+        if (dir.x != 0 && dir.z != 0) {
+            double length = Math.sqrt(dir.x * dir.x + dir.z * dir.z);
+            this.direction.x = dir.x / length;
+            this.direction.z = dir.z / length;
+        }
+        
         this.step = step;
 
         // Create position TransformGroup (root)
@@ -50,6 +58,9 @@ public class NPC {
         
         // Apply initial rotation based on direction
         updateRotation();
+        
+        // Print debug info at creation
+        System.out.println("NPC created with direction: " + direction);
     }
 
     private void loadGhostModel() {
@@ -62,7 +73,6 @@ public class NPC {
             Scene modelScene = loader.load(MODEL_PATH);
             BranchGroup modelBG = modelScene.getSceneGroup();
             modelBG.setCapability(BranchGroup.ALLOW_PICKABLE_READ);
-
             
             // Create green appearance
             Appearance greenAppearance = new Appearance();
@@ -78,12 +88,19 @@ public class NPC {
             
             // Apply appearance to all shapes in the model
             applyAppearanceToModel(modelBG, greenAppearance);
+            
+            // IMPORTANT: Set the initial orientation of the model
+            // This ensures the model is facing the correct direction initially (down)
+            // so that rotations will align properly
+            Transform3D modelOrientation = new Transform3D();
+            TransformGroup orientationTG = new TransformGroup(modelOrientation);
+            orientationTG.addChild(modelBG);
 
             // Scale the model
             Transform3D modelScale = new Transform3D();
             modelScale.setScale(MODEL_SCALE);
             TransformGroup modelScaleTG = new TransformGroup(modelScale);
-            modelScaleTG.addChild(modelBG);
+            modelScaleTG.addChild(orientationTG);
 
             // Create simplified models for LOD that match the ghost dimensions
             Node mediumDetailNode = createSimplifiedGhost(greenAppearance, 0.8);
@@ -157,31 +174,57 @@ public class NPC {
     }
 
     public void updateRotation() {
+        // Create a fresh transform for rotation
         Transform3D rotTransform = new Transform3D();
         
-        // Determine rotation based on primary movement direction
-        if (Math.abs(direction.x) > Math.abs(direction.z)) {
+        // Calculate rotation angle based on direction vector
+        double angle = 0.0;
+        
+        // Calculate angle from direction vector
+        // This matches the GhostModel's rotation logic
+        if (Math.abs(direction.x) > 0 && Math.abs(direction.z) > 0) {
+            // Diagonal movement
+            if (direction.x < 0 && direction.z > 0) {
+                // Down-left
+                angle = -Math.PI/4;
+            } else if (direction.x < 0 && direction.z < 0) {
+                // Up-left
+                angle = -3*Math.PI/4;
+            } else if (direction.x > 0 && direction.z > 0) {
+                // Down-right
+                angle = Math.PI/4;
+            } else {
+                // Up-right
+                angle = 3*Math.PI/4;
+            }
+        } else if (Math.abs(direction.x) > Math.abs(direction.z)) {
             // Moving primarily along X axis
             if (direction.x > 0) {
                 // Right
-                rotTransform.rotY(Math.PI/2);
+                angle = Math.PI/2;
             } else {
                 // Left
-                rotTransform.rotY(-Math.PI/2);
+                angle = -Math.PI/2;
             }
         } else {
             // Moving primarily along Z axis
             if (direction.z < 0) {
                 // Up
-                rotTransform.rotY(Math.PI);
+                angle = Math.PI;
             } else {
                 // Down (default orientation)
-                // No rotation needed
+                angle = 0.0;
             }
         }
         
-        // Apply rotation - this only affects the rotation transform group
+        // Apply rotation around Y axis
+        rotTransform.rotY(angle);
+        
+        // Apply the transform to the rotation group
         rotationTG.setTransform(rotTransform);
+        
+        // Debug output to verify rotation is happening
+        System.out.println("NPC Direction: " + direction + ", Rotation angle: " + angle);
     }
 
     public Vector3d getDirection() {
@@ -231,11 +274,13 @@ public class NPC {
         double newX = position.x + direction.x * step;
         double newZ = position.z + direction.z * step;
 
+        boolean directionChanged = false;
+        
         if (checker.collides(newX, newZ) || CollisionDetector.collidesWithUser(newX, newZ, NPC.getCharacterHalf(), userGhost)) {
-            // Try changing direction up to 4 times
+            // Store old direction for comparison
             Vector3d oldDirection = new Vector3d(direction);
-            boolean directionChanged = false;
             
+            // Try changing direction up to 4 times
             for (int i = 0; i < 4; i++) {
                 direction = randomizeDirection();
                 
@@ -253,10 +298,7 @@ public class NPC {
                 }
             }
             
-            if (directionChanged) {
-                // Direction changed, update rotation
-                updateRotation();
-            } else {
+            if (!directionChanged) {
                 // No valid move found, don't change position
                 return;
             }
@@ -266,13 +308,18 @@ public class NPC {
         position.x = newX;
         position.z = newZ;
 
-        // Update position transform - this doesn't affect rotation
+        // Update position transform
         Transform3D posTransform = new Transform3D();
         posTransform.setTranslation(position);
         positionTG.setTransform(posTransform);
         
-        // Update LOD position for LOD behavior - get all DistanceLOD behaviors
-        // from the scene graph and update their positions
+        // CRITICAL: Always update rotation when direction changes
+        if (directionChanged) {
+            // Force rotation update when direction changes
+            updateRotation();
+        }
+        
+        // Update LOD position for LOD behavior
         updateLODPositions();
     }
 
@@ -305,13 +352,36 @@ public class NPC {
     // Helper method to randomize direction when collision occurs
     private Vector3d randomizeDirection() {
         Random rand = new Random();
-        int choice = rand.nextInt(4);
+        int choice = rand.nextInt(8); // 8 directions instead of 4
+        Vector3d newDir;
+        
         switch (choice) {
-            case 0: return new Vector3d(1, 0, 0);  // Right
-            case 1: return new Vector3d(-1, 0, 0); // Left
-            case 2: return new Vector3d(0, 0, 1);  // Down
-            default: return new Vector3d(0, 0, -1); // Up
+            case 0: newDir = new Vector3d(1, 0, 0);    // Right
+                break;
+            case 1: newDir = new Vector3d(-1, 0, 0);   // Left
+                break;
+            case 2: newDir = new Vector3d(0, 0, 1);    // Down
+                break;
+            case 3: newDir = new Vector3d(0, 0, -1);   // Up
+                break;
+            case 4: newDir = new Vector3d(1, 0, 1);    // Down-right
+                break;
+            case 5: newDir = new Vector3d(-1, 0, 1);   // Down-left
+                break;
+            case 6: newDir = new Vector3d(1, 0, -1);   // Up-right
+                break;
+            default: newDir = new Vector3d(-1, 0, -1); // Up-left
+                break;
         }
+        
+        // Normalize diagonal directions
+        if (newDir.x != 0 && newDir.z != 0) {
+            double length = Math.sqrt(newDir.x * newDir.x + newDir.z * newDir.z);
+            newDir.x = newDir.x / length;
+            newDir.z = newDir.z / length;
+        }
+        
+        return newDir;
     }
 
     /**
@@ -326,22 +396,53 @@ public class NPC {
         Vector3d pos = validPositions.remove(index);
 
         Random rand = new Random();
-        int choice = rand.nextInt(4);
+        int choice = rand.nextInt(8); // Now supporting 8 directions
         Vector3d dir;
+        
         switch (choice) {
-            case 0:
-                dir = new Vector3d(1, 0, 0);  // Right
+            case 0: dir = new Vector3d(1, 0, 0);    // Right
                 break;
-            case 1:
-                dir = new Vector3d(-1, 0, 0); // Left
+            case 1: dir = new Vector3d(-1, 0, 0);   // Left
                 break;
-            case 2:
-                dir = new Vector3d(0, 0, 1);  // Down
+            case 2: dir = new Vector3d(0, 0, 1);    // Down
                 break;
-            default:
-                dir = new Vector3d(0, 0, -1); // Up
+            case 3: dir = new Vector3d(0, 0, -1);   // Up
+                break;
+            case 4: dir = new Vector3d(1, 0, 1);    // Down-right
+                break;
+            case 5: dir = new Vector3d(-1, 0, 1);   // Down-left
+                break;
+            case 6: dir = new Vector3d(1, 0, -1);   // Up-right
+                break;
+            default: dir = new Vector3d(-1, 0, -1); // Up-left
                 break;
         }
+        
+        // Normalize diagonal directions
+        if (dir.x != 0 && dir.z != 0) {
+            double length = Math.sqrt(dir.x * dir.x + dir.z * dir.z);
+            dir.x = dir.x / length;
+            dir.z = dir.z / length;
+        }
+        
         return new NPC(pos, dir, step, appearance);
+    }
+
+    /**
+     * Update the NPC's direction and rotation based on a new direction vector
+     */
+    public void updateDirection(Vector3d newDirection) {
+        // Normalize the direction if needed
+        if (newDirection.x != 0 && newDirection.z != 0) {
+            double length = Math.sqrt(newDirection.x * newDirection.x + newDirection.z * newDirection.z);
+            newDirection.x = newDirection.x / length;
+            newDirection.z = newDirection.z / length;
+        }
+        
+        // Update direction
+        this.direction = newDirection;
+        
+        // Update rotation based on new direction
+        updateRotation();
     }
 }
