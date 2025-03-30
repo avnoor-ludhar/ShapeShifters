@@ -35,11 +35,6 @@ public class BasicServer {
         // Initialize maze and designate moving walls.
         maze = GenerateMaze.getMaze(20, 20);
         // Clear a central area of the maze.
-//        for (int i = 7; i < 13; i++) {
-//            for (int j = 7; j < 13; j++) {
-//                maze.get(i).set(j, 0);
-//            }
-//        }
         for (int i = 9; i < 12; i++) {
             for (int j = 9; j < 12; j++) {
                 maze.get(i).set(j, 0);
@@ -169,6 +164,7 @@ public class BasicServer {
         }
     }
 
+    // Updated broadcast method: sends the message to all clients.
     public static synchronized void broadcast(String message, ClientHandler sender) {
         for (ClientHandler client : clients) {
             client.sendMessage(message);
@@ -223,10 +219,14 @@ public class BasicServer {
             String line;
             try {
                 while ((line = in.readLine()) != null) {
-                    // New: Handle treasure activation message
+                    // Handle treasure activation.
                     if (line.startsWith("TREASURE_ACTIVATE")) {
-                        // When a client activates the treasure, broadcast a morph message to all clients.
                         broadcast("TREASURE_MORPH", this);
+                        continue;
+                    }
+                    // Handle ghost morph commands (e.g., "GREEN" or "BLUE") and any other commands.
+                    if (line.startsWith("GREEN") || line.startsWith("BLUE")) {
+                        broadcast(line, this);
                         continue;
                     }
                     // Process regular player position updates.
@@ -239,6 +239,5 @@ public class BasicServer {
                 e.printStackTrace();
             }
         }
-
     }
 }

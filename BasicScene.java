@@ -1078,11 +1078,12 @@ public class BasicScene extends JPanel implements MouseListener {
     public void mousePressed(MouseEvent e){}
     public void mouseReleased(MouseEvent e) {}
     public void mouseEntered(MouseEvent e) {}
-    @Override
+
     //either:
     //RED clicks on player
     //or
     //BLUE clicks on NPC
+    @Override
     public void mouseClicked(MouseEvent e) {
         // Compute the pick ray from the click coordinates.
         Point3d pixelPos = new Point3d();
@@ -1099,35 +1100,35 @@ public class BasicScene extends JPanel implements MouseListener {
         rayDirection.sub(pixelPos, eyePos);
         rayDirection.normalize();
 
+        // Check for a collision using the red pick tool.
         redPickTool.setShapeRay(eyePos, rayDirection);
-//        System.out.println(redPickTool.pickClosest());
         if (redPickTool.pickClosest() != null) {
-            double dist = Math.pow((Math.pow(redBoxPos.x - blueBoxPos.x, 2) + Math.pow(redBoxPos.z - blueBoxPos.z, 2)), .5);
-            System.out.println("THIS HAPPENS");
+            // Calculate distance between red and blue ghosts.
+            double dist = Math.sqrt(Math.pow(redBoxPos.x - blueBoxPos.x, 2) + Math.pow(redBoxPos.z - blueBoxPos.z, 2));
+            System.out.println("Red pick detected. Distance: " + dist);
             System.out.printf("%f\n %f %f\n%f %f\n", dist, blueBoxPos.x, blueBoxPos.z, redBoxPos.x, redBoxPos.z);
-            if (dist < .5f && playerId == 1) {
-                System.out.println("THIS DOESNT HAPPEN :(((((");
+            // If within a threshold and this is player 1, update blue ghost's position.
+            if (dist < 0.5f && playerId == 1) {
+                System.out.println("Red player's action: updating blue ghost position.");
                 Point2f p = getUnfilledPosn();
-//                blueBoxPos.x = p.getX();
-//                blueBoxPos.z = p.getY();
-//                blueBoxPos = new Vector3d(0.0, 0.1, 0.0);
                 blueBoxPos.x = p.getX();
                 blueBoxPos.z = p.getY();
-                out.println(2 + " " + p.getX() + " " + 0.1 + " " + p.getY() + " " + GhostModel.DIRECTION_DOWN);
+                // Broadcast new blue ghost position to all clients.
+                out.println("2 " + p.getX() + " " + 0.1 + " " + p.getY() + " " + GhostModel.DIRECTION_DOWN);
                 blueGhost.updatePositionAndRotation(p.getX(), p.getY(), GhostModel.DIRECTION_DOWN);
             }
         }
 
-
-
+        // Check for a collision using the blue pick tool.
         bluePickTool.setShapeRay(eyePos, rayDirection);
-//        System.out.println(redPickTool.pickClosest());
         if (bluePickTool.pickClosest() != null && playerId == 2) {
+            // Instead of directly changing the appearance, we call triggerChange() so the event is sent to the server.
             blueGhostCycle.triggerChange();
         }
 
         return;
     }
+
 
 
     private BranchGroup createTreasure(double x, double y, double z) {
