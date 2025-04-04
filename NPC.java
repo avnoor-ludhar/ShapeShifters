@@ -237,19 +237,6 @@ public class NPC {
         return new Vector3d(position);
     }
 
-    // How the NPC bounces off surfaces
-    public void bounce() {
-        // Reverse the direction vector
-        direction.scale(-1);
-        // Push back further than one step to prevent sticking
-        position.x += direction.x * step * 2;
-        position.z += direction.z * step * 2;
-        updateRotation();
-        Transform3D posTransform = new Transform3D();
-        posTransform.setTranslation(position);
-        positionTG.setTransform(posTransform);
-    }
-
     // Sets position of NPC
     public void setPosition(Vector3d newPos) {
         this.position = new Vector3d(newPos);

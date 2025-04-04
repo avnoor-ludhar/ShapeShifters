@@ -84,7 +84,7 @@ public class AppearanceCycleBehavior extends Behavior {
         wakeupOn(wakeupCondition);
     }
 
-    // Call this method when the stimulus happens.
+    // Call this method when the stimulus happens
     public void triggerChange() {
         if (state == 0) { // eligible
             pw.println("GREEN");
@@ -99,7 +99,7 @@ public class AppearanceCycleBehavior extends Behavior {
     public void processStimulus(Iterator<WakeupCriterion> criteria) {
         long now = System.currentTimeMillis();
         if (state == 1 && (now - changeTime >= 5000)) {
-            // 10 seconds passed: revert to original appearance.
+            // 10 seconds passed: revert to original appearance
             pw.println("BLUE");
             updateAppearance(targetShape, originalAppearance);
             ghost.step = .01;
@@ -107,7 +107,7 @@ public class AppearanceCycleBehavior extends Behavior {
             changeTime = now;
             state = 2; // now in cooldown
         } else if (state == 2 && (now - changeTime >= 20000)) {
-            // 20 seconds cooldown passed: eligible for new change.
+            // 20 seconds cooldown passed: eligible for new change
             state = 0;
         }
         wakeupOn(new WakeupOnElapsedTime(100));
